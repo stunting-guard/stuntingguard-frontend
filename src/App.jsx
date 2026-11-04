@@ -5,8 +5,10 @@ import LoginPage from './pages/auth/LoginPage'
 import KaderLayout from './layouts/KaderLayout'
 
 // Pages Kader
+import DashboardAnalitik from './pages/kader/DashboardAnalitik'
 import InputDataKeluarga from './pages/kader/InputDataKeluarga'
 import HasilKlasifikasi from './pages/kader/HasilKlasifikasi'
+import RiwayatPrediksi from './pages/kader/RiwayatPrediksi'
 
 // Placeholder Pages Aparatur & Admin
 import DashboardAparatur from './pages/aparatur/DashboardAparatur'
@@ -16,19 +18,22 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* Redirect root ke /login */}
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/login" element={<LoginPage />} />
         
         {/* Nested Routing untuk Role Kader */}
         <Route path="/kader" element={<KaderLayout />}>
-          <Route index element={<Navigate to="input-data" replace />} />
-          {/* Mengarahkan redirect login /kader/dashboard langsung ke form input data */}
-          <Route path="dashboard" element={<Navigate to="/kader/input-data" replace />} />
+          {/* Saat akses /kader, otomatis redirect ke /kader/dashboard */}
+          <Route index element={<Navigate to="dashboard" replace />} />
+          
+          <Route path="dashboard" element={<DashboardAnalitik />} />
           <Route path="input-data" element={<InputDataKeluarga />} />
           <Route path="hasil" element={<HasilKlasifikasi />} />
-          <Route path="riwayat" element={<div className="p-8 font-semibold text-[#0F2942]">Halaman Riwayat (WIP)</div>} />
+          <Route path="riwayat" element={<RiwayatPrediksi />} />
         </Route>
 
+        {/* Placeholder Routing Aparatur & Admin */}
         <Route path="/aparatur/*" element={<DashboardAparatur />} />
         <Route path="/admin/*" element={<DashboardAdmin />} />
       </Routes>
