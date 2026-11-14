@@ -15,4 +15,4 @@ export default function AparaturLayout() {
   const [user] = useState({ name: "Varghi Ganteng", role: "Aparatur Desa" });
 
   return <DashboardLayout navItems={NAV_ITEMS} user={user} maxWidth="max-w-6xl" />;
-}
+} 

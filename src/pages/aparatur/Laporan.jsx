@@ -192,7 +192,6 @@ export default function Laporan() {
 
   const handleExportExcel = () => {
     // TODO: sambungkan ke endpoint ekspor .xlsx setelah backend siap
-    console.log("Ekspor Excel");
   };
   const handlePrint = () => window.print();
 

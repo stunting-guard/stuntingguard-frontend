@@ -231,7 +231,6 @@ export default function DataKeluarga() {
   const handlePrint = () => window.print();
   const handleDownload = () => {
     // TODO: sambungkan ke endpoint laporan (PDF/Excel) setelah backend siap
-    console.log("Unduh laporan Data Keluarga");
   };
 
   return (

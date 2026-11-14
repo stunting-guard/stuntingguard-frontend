@@ -128,7 +128,6 @@ export default function HasilPrediksi() {
   const handlePrint = () => window.print();
   const handleInputBaru = () => {
     // TODO: navigate("/aparatur/prediksi-baru") atau buka form input
-    console.log("Input prediksi baru");
   };
 
   return (
