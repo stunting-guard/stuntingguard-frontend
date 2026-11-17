@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   ArrowDown,
@@ -16,7 +16,6 @@ import {
   Loader2,
   Pencil,
   Plus,
-  Power,
   RotateCcw,
   ShieldCheck,
   Trash2,
@@ -34,10 +33,8 @@ import EmptyTableRow from "../../components/ui/EmptyTableRow";
 import Field, { inputClass } from "../../components/ui/Field";
 import useToast from "../../hooks/useToast";
 import useSafeTimeout from "../../hooks/useSafeTimeout";
+import { api } from "../../services/api";
 
-/* ------------------------------------------------------------------ */
-/* Mock data — ganti dengan response API saat backend siap             */
-/* ------------------------------------------------------------------ */
 const PAGE_SIZE = 6;
 
 const ROLE_META = {
@@ -76,138 +73,15 @@ const FILTER_STATUS = [
   { value: "Nonaktif", label: "Nonaktif" },
 ];
 
-const MOCK_USERS = [
-  {
-    id: 1,
-    nama: "Siti Rahmawati, S.Tr.Keb",
-    email: "siti.rahma@desa-sehat.id",
-    username: "siti_posyandu",
-    peran: "Kader",
-    peranDetail: "Kader Posyandu / Bidan",
-    wilayah: "Posyandu Melati 1 (RW 02)",
-    status: "Aktif",
-  },
-  {
-    id: 2,
-    nama: "Budi Santoso",
-    email: "budi.kesra@sukamaju.go.id",
-    username: "budi_desa",
-    peran: "Aparatur",
-    peranDetail: "Aparatur Desa",
-    wilayah: "Kantor Desa Sukamaju (Sie Kesra)",
-    status: "Aktif",
-  },
-  {
-    id: 3,
-    nama: "Dewi Lestari, Amd.Keb",
-    email: "dewi.lestar@kader.id",
-    username: "dewi_kader",
-    peran: "Kader",
-    peranDetail: "Kader Posyandu",
-    wilayah: "Posyandu Mawar 2 (RW 04)",
-    status: "Aktif",
-  },
-  {
-    id: 4,
-    nama: "Ahmad Fauzi",
-    email: "ahmad.fauzi@mhs.kampus.ac.id",
-    username: "ahmad_admin",
-    peran: "Admin",
-    peranDetail: "Admin / Mahasiswa",
-    wilayah: "Kampus / Server Machine Learning",
-    status: "Aktif",
-    badge: "Peneliti",
-  },
-  {
-    id: 5,
-    nama: "Rina Wulandari",
-    email: "rina.dinkes@kecamatan.go.id",
-    username: "rina_desa",
-    peran: "Aparatur",
-    peranDetail: "Aparatur Desa / Dinkes",
-    wilayah: "Puskesmas Pembantu Sukamaju",
-    status: "Aktif",
-  },
-  {
-    id: 6,
-    nama: "Nurul Hidayah",
-    email: "nurul.posyandu@desa.id",
-    username: "nurul_kader",
-    peran: "Kader",
-    peranDetail: "Kader Posyandu",
-    wilayah: "Posyandu Cempaka (RW 07)",
-    status: "Nonaktif",
-  },
-  {
-    id: 7,
-    nama: "Sri Wahyuni, S.Keb",
-    email: "sri.wahyuni@desa.id",
-    username: "sri_posyandu",
-    peran: "Kader",
-    peranDetail: "Kader Posyandu / Bidan",
-    wilayah: "Posyandu Kenanga (RW 01)",
-    status: "Aktif",
-  },
-  {
-    id: 8,
-    nama: "Joko Susilo",
-    email: "joko.susilo@desa.id",
-    username: "joko_kader",
-    peran: "Kader",
-    peranDetail: "Kader Posyandu",
-    wilayah: "Posyandu Anggrek (RW 03)",
-    status: "Aktif",
-  },
-  {
-    id: 9,
-    nama: "Ratna Sari, S.KM",
-    email: "ratna.sari@puskesmas.go.id",
-    username: "ratna_kader",
-    peran: "Kader",
-    peranDetail: "Kader Posyandu / Gizi",
-    wilayah: "Puskesmas Sukamaju",
-    status: "Aktif",
-  },
-  {
-    id: 10,
-    nama: "Hendra Gunawan",
-    email: "hendra@kecamatan.go.id",
-    username: "hendra_desa",
-    peran: "Aparatur",
-    peranDetail: "Aparatur Desa",
-    wilayah: "Kecamatan Sukamaju",
-    status: "Aktif",
-  },
-  {
-    id: 11,
-    nama: "Maya Puspita",
-    email: "maya.puspita@mhs.kampus.ac.id",
-    username: "maya_admin",
-    peran: "Admin",
-    peranDetail: "Admin / Mahasiswa",
-    wilayah: "Kampus / Server Machine Learning",
-    status: "Aktif",
-    badge: "Peneliti",
-  },
-  {
-    id: 12,
-    nama: "Andi Pratama",
-    email: "andi.pratama@desa.id",
-    username: "andi_kader",
-    peran: "Kader",
-    peranDetail: "Kader Posyandu",
-    wilayah: "Posyandu Dahlia (RW 05)",
-    status: "Aktif",
-  },
-];
-
 const EMPTY_FORM = {
   nama: "",
   email: "",
   username: "",
+  password: "",
   peran: "Kader",
   peranDetail: "",
   wilayah: "",
+  dusunId: "",
   status: "Aktif",
 };
 
@@ -223,10 +97,7 @@ const AVATAR_TONES = [
 const fmt = new Intl.NumberFormat("id-ID");
 const satuDesimal = (n) => n.toFixed(1).replace(".", ",");
 
-/* ------------------------------------------------------------------ */
-/* Helper                                                              */
-/* ------------------------------------------------------------------ */
-function inisial(nama) {
+function inisial(nama = "") {
   return nama
     .split(",")[0]
     .trim()
@@ -234,30 +105,22 @@ function inisial(nama) {
     .slice(0, 2)
     .map((kata) => kata[0])
     .join("")
-    .toUpperCase();
+    .toUpperCase() || "SG";
 }
 
-function buatSandiSementara() {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
-  let sandi = "SG-";
-  for (let i = 0; i < 8; i += 1) sandi += chars[Math.floor(Math.random() * chars.length)];
-  return sandi;
-}
-
-/* ------------------------------------------------------------------ */
-/* Sub-komponen lokal                                                  */
-/* ------------------------------------------------------------------ */
 function SortIcon({ active, direction }) {
   if (!active) return <ArrowUpDown className="h-3 w-3 shrink-0 text-slate-400" aria-hidden="true" />;
   if (direction === "asc") return <ArrowUp className="h-3 w-3 shrink-0 text-teal-700" aria-hidden="true" />;
   return <ArrowDown className="h-3 w-3 shrink-0 text-teal-700" aria-hidden="true" />;
 }
 
-/* ------------------------------------------------------------------ */
-/* Halaman                                                             */
-/* ------------------------------------------------------------------ */
 export default function KelolaPengguna() {
-  const [users, setUsers] = useState(MOCK_USERS);
+  const [users, setUsers] = useState([]);
+  const [dusunOptions, setDusunOptions] = useState([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [isLoading, setIsLoading] = useState(true);
+
   const [query, setQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("Semua");
   const [statusFilter, setStatusFilter] = useState("Semua");
@@ -277,55 +140,88 @@ export default function KelolaPengguna() {
   const [resetTarget, setResetTarget] = useState(null);
   const [resetState, setResetState] = useState({ loading: false, password: "", copied: false });
 
-  const [busyId, setBusyId] = useState(null);
   const { toast, showToast } = useToast();
   const schedule = useSafeTimeout();
 
+  // Muat opsi wilayah / dusun untuk penugasan kader
+  useEffect(() => {
+    let isMounted = true;
+    async function loadMasterWilayah() {
+      try {
+        const res = await api.get("/master/wilayah");
+        if (isMounted && res?.success && Array.isArray(res?.data?.dusun)) {
+          setDusunOptions(res.data.dusun);
+        }
+      } catch {
+        // Fallback default
+      }
+    }
+    loadMasterWilayah();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Muat data pengguna dari backend
+  const fetchUsers = async () => {
+    setIsLoading(true);
+    try {
+      const params = {
+        search: query.trim() || undefined,
+        role: roleFilter !== "Semua" ? roleFilter : undefined,
+        page,
+        limit: PAGE_SIZE,
+        sortKey: sortKey || undefined,
+        sortDir: sortDir || undefined,
+      };
+
+      const res = await api.get("/admin/users", params);
+
+      if (res?.success && res?.data) {
+        setUsers(res.data.items || []);
+        if (res.data.meta) {
+          setTotalCount(res.data.meta.total || 0);
+          setTotalPages(res.data.meta.totalPages || 1);
+        }
+      }
+    } catch (err) {
+      showToast(err?.data?.message || err?.message || "Gagal memuat data pengguna.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchUsers();
+    }, 250);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [query, roleFilter, page, sortKey, sortDir]);
+
   /* ------------------------- Filter, sort, pagination ------------------------- */
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return users.filter((user) => {
-      const cocokQuery =
-        !q ||
-        [user.nama, user.email, user.username, user.wilayah, user.peranDetail].some((value) =>
-          value.toLowerCase().includes(q)
-        );
-      const cocokRole = roleFilter === "Semua" || user.peran === roleFilter;
-      const cocokStatus = statusFilter === "Semua" || user.status === statusFilter;
-      return cocokQuery && cocokRole && cocokStatus;
-    });
-  }, [users, query, roleFilter, statusFilter]);
-
-  const sorted = useMemo(() => {
-    if (!sortKey) return filtered;
-    const collator = new Intl.Collator("id-ID", { sensitivity: "base" });
-    return [...filtered].sort((a, b) => {
-      let hasil = 0;
-      if (sortKey === "nama") hasil = collator.compare(a.nama, b.nama);
-      else if (sortKey === "peran") {
-        hasil = collator.compare(ROLE_META[a.peran].label, ROLE_META[b.peran].label);
-      } else if (sortKey === "status") hasil = collator.compare(a.status, b.status);
-      return sortDir === "asc" ? hasil : -hasil;
-    });
-  }, [filtered, sortKey, sortDir]);
-
-  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
-  const current = Math.min(page, totalPages);
-  const from = sorted.length === 0 ? 0 : (current - 1) * PAGE_SIZE + 1;
-  const to = Math.min(current * PAGE_SIZE, sorted.length);
-  const pageRows = sorted.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE);
+  const from = totalCount === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const to = Math.min(page * PAGE_SIZE, totalCount);
 
   const ringkasan = useMemo(() => {
-    const total = users.length;
-    const aktif = users.filter((user) => user.status === "Aktif").length;
+    const total = totalCount || users.length;
+    const aktif = users.filter((u) => u.status === "Aktif").length;
     const peran = ROLE_OPTIONS.reduce(
-      (acc, role) => ({ ...acc, [role]: users.filter((user) => user.peran === role).length }),
+      (acc, role) => ({
+        ...acc,
+        [role]: users.filter((u) => u.peran === role || u.role === role.toUpperCase()).length,
+      }),
       {}
     );
-    const terbesar = ROLE_OPTIONS.reduce((a, b) => (peran[b] > peran[a] ? b : a), ROLE_OPTIONS[0]);
-    const persen = total === 0 ? 0 : (peran[terbesar] / total) * 100;
+    const terbesar = ROLE_OPTIONS.reduce(
+      (a, b) => ((peran[b] || 0) > (peran[a] || 0) ? b : a),
+      ROLE_OPTIONS[0]
+    );
+    const persen = total === 0 ? 0 : ((peran[terbesar] || 0) / total) * 100;
     return { total, aktif, nonaktif: total - aktif, peran, terbesar, persen };
-  }, [users]);
+  }, [users, totalCount]);
 
   const resetFilter = () => {
     setQuery("");
@@ -362,13 +258,15 @@ export default function KelolaPengguna() {
   const bukaEdit = (user) => {
     setEditing(user);
     setForm({
-      nama: user.nama,
-      email: user.email,
-      username: user.username,
-      peran: user.peran,
-      peranDetail: user.peranDetail,
-      wilayah: user.wilayah,
-      status: user.status,
+      nama: user.nama || user.name || "",
+      email: user.email || "",
+      username: user.username || "",
+      password: "",
+      peran: user.peran || "Kader",
+      peranDetail: user.peranDetail || "",
+      wilayah: user.wilayah || "",
+      dusunId: user.dusunId ? String(user.dusunId) : "",
+      status: user.status || "Aktif",
     });
     setErrors({});
     setFormOpen(true);
@@ -385,784 +283,608 @@ export default function KelolaPengguna() {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
       next.email = "Masukkan alamat email yang valid.";
     }
-    if (!/^[a-zA-Z0-9._-]{3,}$/.test(form.username.trim())) {
-      next.username = "Username minimal 3 karakter (huruf, angka, titik, garis bawah).";
-    }
-    if (!form.wilayah.trim()) next.wilayah = "Wilayah tugas / instansi wajib diisi.";
-
-    const emailSama = users.some(
-      (user) =>
-        user.id !== editing?.id &&
-        user.email.toLowerCase() === form.email.trim().toLowerCase()
-    );
-    if (emailSama) next.email = "Email sudah digunakan akun lain.";
-
-    const usernameSama = users.some(
-      (user) =>
-        user.id !== editing?.id &&
-        user.username.toLowerCase() === form.username.trim().toLowerCase()
-    );
-    if (usernameSama) next.username = "Username sudah digunakan akun lain.";
-
-    setErrors(next);
-    return Object.keys(next).length === 0;
+    return next;
   };
 
-  const simpanForm = (event) => {
-    event.preventDefault();
-    if (isSaving || !validasiForm()) return;
-
-    const payload = {
-      nama: form.nama.trim(),
-      email: form.email.trim(),
-      username: form.username.trim(),
-      peran: form.peran,
-      peranDetail:
-        form.peranDetail.trim() || ROLE_META[form.peran]?.label || "Pengguna",
-      wilayah: form.wilayah.trim(),
-      status: form.status,
-    };
+  const simpanForm = async (e) => {
+    e.preventDefault();
+    const nextErrors = validasiForm();
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors(nextErrors);
+      return;
+    }
 
     setIsSaving(true);
-    // Simulasi penyimpanan — tidak mengirim data ke backend
-    schedule(() => {
+    try {
+      const payload = {
+        name: form.nama.trim(),
+        email: form.email.trim().toLowerCase(),
+        role: form.peran.toUpperCase(),
+        dusunId: form.dusunId ? Number(form.dusunId) : undefined,
+        password: form.password ? form.password.trim() : undefined,
+      };
+
       if (editing) {
-        setUsers((prev) =>
-          prev.map((user) => (user.id === editing.id ? { ...user, ...payload } : user))
-        );
-        showToast(`Akun ${payload.nama} berhasil diperbarui (simulasi).`);
+        const res = await api.put(`/admin/users/${editing.id}`, payload);
+        if (res?.success) {
+          showToast(`Akun ${form.nama} berhasil diperbarui.`);
+          setFormOpen(false);
+          fetchUsers();
+        } else {
+          showToast(res?.message || "Gagal memperbarui pengguna.");
+        }
       } else {
-        setUsers((prev) => [
-          ...prev,
-          { ...payload, id: Math.max(0, ...prev.map((user) => user.id)) + 1 },
-        ]);
-        showToast(`Akun ${payload.nama} berhasil ditambahkan (simulasi).`);
+        const res = await api.post("/admin/users", payload);
+        if (res?.success) {
+          const tempPass = res.data?.temporaryPassword;
+          showToast(
+            `Pengguna ${form.nama} berhasil ditambahkan.` +
+              (tempPass ? ` Sandi awal: ${tempPass}` : "")
+          );
+          setFormOpen(false);
+          fetchUsers();
+        } else {
+          showToast(res?.message || "Gagal membuat pengguna.");
+        }
       }
+    } catch (err) {
+      if (err?.data?.errors) {
+        setErrors(err.data.errors);
+      }
+      showToast(err?.data?.message || err?.message || "Terjadi kesalahan saat menyimpan akun.");
+    } finally {
       setIsSaving(false);
-      setFormOpen(false);
-      setEditing(null);
-      setForm(EMPTY_FORM);
-    }, 900);
+    }
   };
 
-  /* ------------------------- Aksi akun ------------------------- */
-  const toggleStatus = (user) => {
-    if (busyId !== null) return;
-    setBusyId(user.id);
-    const statusBaru = user.status === "Aktif" ? "Nonaktif" : "Aktif";
-    schedule(() => {
-      setUsers((prev) =>
-        prev.map((item) => (item.id === user.id ? { ...item, status: statusBaru } : item))
-      );
-      setBusyId(null);
-      showToast(
-        `Akun ${user.nama} ${statusBaru === "Aktif" ? "diaktifkan" : "dinonaktifkan"} (simulasi).`
-      );
-    }, 600);
-  };
+  /* ------------------------- Aksi hapus ------------------------- */
+  const konfirmasiHapus = (user) => setDeleteTarget(user);
 
-  const konfirmasiHapus = () => {
-    if (!deleteTarget || isDeleting) return;
+  const eksekusiHapus = async () => {
+    if (!deleteTarget) return;
     setIsDeleting(true);
-    schedule(() => {
-      setUsers((prev) => prev.filter((user) => user.id !== deleteTarget.id));
-      showToast(`Akun ${deleteTarget.nama} berhasil dihapus (simulasi).`);
+    try {
+      const res = await api.delete(`/admin/users/${deleteTarget.id}`);
+      if (res?.success) {
+        showToast(`Akun ${deleteTarget.nama || deleteTarget.name} telah dihapus.`);
+        setDeleteTarget(null);
+        fetchUsers();
+      } else {
+        showToast(res?.message || "Gagal menghapus pengguna.");
+      }
+    } catch (err) {
+      showToast(err?.data?.message || err?.message || "Gagal menghapus pengguna.");
+    } finally {
       setIsDeleting(false);
-      setDeleteTarget(null);
-    }, 900);
+    }
   };
 
-  const bukaReset = (user) => {
+  /* ------------------------- Aksi reset sandi ------------------------- */
+  const konfirmasiReset = (user) => {
     setResetTarget(user);
     setResetState({ loading: false, password: "", copied: false });
   };
 
-  const mulaiReset = () => {
-    if (resetState.loading) return;
+  const eksekusiReset = async () => {
+    if (!resetTarget) return;
     setResetState({ loading: true, password: "", copied: false });
-    schedule(() => {
-      setResetState({ loading: false, password: buatSandiSementara(), copied: false });
-      showToast(`Sandi sementara untuk ${resetTarget.nama} berhasil dibuat (simulasi).`);
-    }, 900);
-  };
 
-  const salinSandi = async () => {
     try {
-      await navigator.clipboard.writeText(resetState.password);
-      setResetState((prev) => ({ ...prev, copied: true }));
-    } catch {
-      showToast("Gagal menyalin sandi. Silakan salin secara manual.");
+      const res = await api.patch(`/admin/users/${resetTarget.id}/reset-password`, {});
+      if (res?.success && res?.data) {
+        const pass = res.data.temporaryPassword || res.data.password || "SG-Temp123";
+        setResetState({ loading: false, password: pass, copied: false });
+        showToast(`Kata sandi akun ${resetTarget.nama} berhasil direset.`);
+      } else {
+        setResetState({ loading: false, password: "", copied: false });
+        showToast(res?.message || "Gagal mereset kata sandi.");
+      }
+    } catch (err) {
+      setResetState({ loading: false, password: "", copied: false });
+      showToast(err?.data?.message || err?.message || "Gagal mereset kata sandi.");
     }
   };
 
-  /* ------------------------- Render ------------------------- */
+  const salinSandi = async () => {
+    if (!resetState.password) return;
+    try {
+      await navigator.clipboard.writeText(resetState.password);
+      setResetState((prev) => ({ ...prev, copied: true }));
+      schedule(() => setResetState((prev) => ({ ...prev, copied: false })), 2000);
+      showToast("Sandi sementara berhasil disalin ke papan klip.");
+    } catch {
+      showToast("Gagal menyalin sandi.");
+    }
+  };
+
   return (
     <div className="space-y-5 sm:space-y-6">
       <Toast message={toast} />
 
       {/* Header halaman */}
       <PageHeader
-        breadcrumb={[
-          { label: "Administrasi Sistem" },
-          { label: "Pengelolaan Pengguna / Skripsi" },
-        ]}
-        title="Manajemen Akun & Hak Akses Pengguna"
-        description="Daftar pengguna terdaftar pada sistem klasifikasi stunting desa berdasarkan tingkatan peran (role-based access control) untuk validasi penelitian tugas akhir."
-        actions={
+        chip="Panel Kendali Akun Pengguna"
+        title="Kelola Pengguna Sistem"
+        description="Pengaturan hak akses role-based access control (RBAC) untuk Kader Posyandu, Aparatur Desa, dan Admin sistem."
+        action={
           <button
             type="button"
             onClick={bukaTambah}
-            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-teal-800 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-teal-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
+            className="inline-flex items-center gap-2 rounded-xl bg-teal-800 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-teal-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
           >
-            <Plus className="h-4 w-4" aria-hidden="true" />
-            Tambah Akun Baru
+            <UserPlus className="h-4 w-4" aria-hidden="true" />
+            Tambah Pengguna
           </button>
         }
       />
 
-      {/* Kartu ringkasan */}
-      <section aria-label="Ringkasan pengguna" className="grid gap-4 lg:grid-cols-3">
+      {/* Ringkasan metrik */}
+      <section aria-label="Ringkasan pengguna" className="grid gap-4 md:grid-cols-3 lg:gap-5">
         <StatCard
           label="Total Pengguna Terdaftar"
-          icon={<Users className="h-5 w-5 shrink-0 text-slate-600" aria-hidden="true" />}
-          iconWrapClassName={null}
-          value={
-            <>
-              {fmt.format(ringkasan.total)}{" "}
-              <span className="text-sm font-medium text-slate-500">Akun</span>
-            </>
-          }
-          valueClassName="mt-3 text-4xl font-extrabold tracking-tight text-[#0F2942]"
+          value={fmt.format(ringkasan.total)}
+          caption="Akun Sistem"
+          icon={<Users className="h-5 w-5" strokeWidth={1.8} aria-hidden="true" />}
+          footerBorder
           footer={
-            <>
-              <span className="inline-flex items-center gap-1.5">
-                <span className="h-1.5 w-1.5 rounded-full bg-teal-600" aria-hidden="true" />
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 rounded-md bg-[#E7F5F0] px-2.5 py-1 text-[11px] font-semibold text-teal-800">
+                <CircleCheck className="h-3.5 w-3.5" aria-hidden="true" />
                 {ringkasan.aktif} Akun Aktif
               </span>
-              <span className="text-slate-300" aria-hidden="true">
-                •
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <span className="h-1.5 w-1.5 rounded-full bg-slate-400" aria-hidden="true" />
-                {ringkasan.nonaktif} Akun Nonaktif Sementara
-              </span>
-            </>
+              {ringkasan.nonaktif > 0 && (
+                <span className="text-[11px] text-slate-500">
+                  {ringkasan.nonaktif} Nonaktif
+                </span>
+              )}
+            </div>
           }
-          footerClassName="flex flex-wrap items-center gap-x-2 gap-y-1 pt-5 text-xs font-semibold text-slate-600"
         />
 
         <StatCard
-          label="Distribusi Tingkat Peran (Role)"
-          icon={<ClipboardCheck className="h-5 w-5" aria-hidden="true" />}
-          iconWrapClassName="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-teal-700"
-          footer={
-            <>
-              <Crown className="h-3.5 w-3.5 shrink-0 text-teal-700" aria-hidden="true" />
-              Proposisi terbesar: {ROLE_META[ringkasan.terbesar].label} (
-              {satuDesimal(ringkasan.persen)}%)
-            </>
-          }
-          footerClassName="flex items-center gap-1.5 pt-4 text-[11px] font-semibold text-slate-600"
-        >
-          <div className="mt-3 flex flex-col items-start gap-2">
-            {ROLE_OPTIONS.map((role) => {
-              const utama = role === ringkasan.terbesar;
-              return (
-                <span
-                  key={role}
-                  className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
-                    utama
-                      ? "border-teal-200 bg-teal-50/70 text-teal-800"
-                      : "border-slate-200 bg-white text-slate-600"
-                  }`}
-                >
-                  {ROLE_META[role].label} ({ringkasan.peran[role]})
-                </span>
-              );
-            })}
-          </div>
-        </StatCard>
+          label="Distribusi Peran Terbanyak"
+          value={ROLE_META[ringkasan.terbesar]?.label || "Kader Posyandu"}
+          caption={`${satuDesimal(ringkasan.persen)}% Dari Total Akun`}
+          icon={<Crown className="h-5 w-5" strokeWidth={1.8} aria-hidden="true" />}
+        />
 
         <StatCard
-          label="Keamanan & Hak Akses"
-          icon={<ShieldCheck className="h-5 w-5 shrink-0 text-teal-700" aria-hidden="true" />}
-          iconWrapClassName={null}
-          value="Role-Based Access Control"
-          valueClassName="mt-3 max-w-[17rem] text-2xl font-extrabold leading-tight tracking-tight text-[#0F2942]"
+          label="Hak Akses Berjenjang"
+          value="3 Level"
+          caption="Role-Based Security"
+          icon={<ShieldCheck className="h-5 w-5" strokeWidth={1.8} aria-hidden="true" />}
+          footerBorder
           footer={
-            <>
-              <CircleCheck
-                className="mt-px h-3.5 w-3.5 shrink-0 text-teal-700"
-                aria-hidden="true"
-              />
-              RBAC Aktif & Terenkripsi Argon2id (Validasi Sidang)
-            </>
+            <span className="inline-flex items-center gap-1.5 rounded-md bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-teal-800">
+              <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
+              Role: Admin, Aparatur, Kader
+            </span>
           }
-          footerClassName="flex items-start gap-1.5 pt-4 text-[11px] font-semibold text-slate-600"
         />
       </section>
 
-      {/* Filter */}
-      <section aria-label="Filter pengguna" className="rounded-2xl bg-white p-4 shadow-sm">
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
-          <SearchInput
-            value={query}
-            onChange={(value) => {
-              setQuery(value);
-              setPage(1);
-            }}
-            placeholder="Cari nama pengguna, username, atau email..."
-            ariaLabel="Cari pengguna"
-            inputClassName="text-xs text-slate-800"
-          />
+      {/* Filter & pencarian */}
+      <section className="rounded-2xl bg-white p-5 shadow-sm sm:p-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="w-full lg:max-w-md">
+            <SearchInput
+              value={query}
+              onChange={(val) => {
+                setQuery(val);
+                setPage(1);
+              }}
+              placeholder="Cari nama, email, username, atau wilayah tugas..."
+              aria-label="Cari pengguna"
+            />
+          </div>
 
-          <FilterSelect
-            label="Filter peran"
-            value={roleFilter}
-            onChange={(value) => {
-              setRoleFilter(value);
-              setPage(1);
-            }}
-            options={FILTER_ROLE}
-            className="xl:w-64"
-          />
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="w-full sm:w-56">
+              <FilterSelect
+                label="Filter Peran"
+                value={roleFilter}
+                onChange={(val) => {
+                  setRoleFilter(val);
+                  setPage(1);
+                }}
+                options={FILTER_ROLE}
+                icon={Building2}
+              />
+            </div>
 
-          <FilterSelect
-            label="Filter status"
-            value={statusFilter}
-            onChange={(value) => {
-              setStatusFilter(value);
-              setPage(1);
-            }}
-            options={FILTER_STATUS}
-            className="xl:w-64"
-          />
+            <div className="w-full sm:w-52">
+              <FilterSelect
+                label="Filter Status"
+                value={statusFilter}
+                onChange={(val) => {
+                  setStatusFilter(val);
+                  setPage(1);
+                }}
+                options={FILTER_STATUS}
+                icon={CircleCheck}
+              />
+            </div>
 
-          <div className="flex items-center justify-between gap-3 xl:ml-auto">
-            <button
-              type="button"
-              onClick={resetFilter}
-              className="inline-flex items-center gap-2 rounded-xl bg-slate-100 px-3.5 py-2.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-200 focus-visible:outline-2 focus-visible:outline-teal-700"
-            >
-              <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
-              Reset Filter
-            </button>
-            <span className="whitespace-nowrap text-[11px] font-semibold text-slate-500">
-              Total {pageRows.length} Ditampilkan
-            </span>
+            {(query || roleFilter !== "Semua" || statusFilter !== "Semua") && (
+              <button
+                type="button"
+                onClick={resetFilter}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-teal-700"
+              >
+                <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+                Reset
+              </button>
+            )}
           </div>
         </div>
-      </section>
 
-      {/* Tabel pengguna */}
-      <section className="overflow-hidden rounded-2xl bg-white shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[1060px] text-left text-sm">
-            <thead>
-              <tr className="border-b border-slate-100 bg-slate-50/70 text-[10px] font-bold uppercase tracking-wide text-slate-500 whitespace-nowrap">
-                <th scope="col" className="px-5 py-3.5">No</th>
-                <th scope="col" aria-sort={ariaSort("nama")} className="px-3 py-3.5">
-                  <button
-                    type="button"
-                    onClick={() => toggleSort("nama")}
-                    title="Urutkan berdasarkan nama"
-                    className="inline-flex items-center gap-1.5 rounded uppercase tracking-wide transition hover:text-teal-700 focus-visible:outline-2 focus-visible:outline-teal-700"
-                  >
-                    Nama Lengkap
-                    <SortIcon active={sortKey === "nama"} direction={sortDir} />
-                  </button>
-                </th>
-                <th scope="col" className="px-3 py-3.5">Username / Kredensial</th>
-                <th scope="col" aria-sort={ariaSort("peran")} className="px-3 py-3.5">
-                  <button
-                    type="button"
-                    onClick={() => toggleSort("peran")}
-                    title="Urutkan berdasarkan peran"
-                    className="inline-flex items-center gap-1.5 rounded uppercase tracking-wide transition hover:text-teal-700 focus-visible:outline-2 focus-visible:outline-teal-700"
-                  >
-                    Peran / Role
-                    <SortIcon active={sortKey === "peran"} direction={sortDir} />
-                  </button>
-                </th>
-                <th scope="col" className="px-3 py-3.5">Wilayah Tugas / Instansi</th>
-                <th scope="col" aria-sort={ariaSort("status")} className="px-3 py-3.5">
-                  <button
-                    type="button"
-                    onClick={() => toggleSort("status")}
-                    title="Urutkan berdasarkan status"
-                    className="inline-flex items-center gap-1.5 rounded uppercase tracking-wide transition hover:text-teal-700 focus-visible:outline-2 focus-visible:outline-teal-700"
-                  >
-                    Status Akun
-                    <SortIcon active={sortKey === "status"} direction={sortDir} />
-                  </button>
-                </th>
-                <th scope="col" className="px-5 py-3.5 text-right">Aksi Manajemen</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {pageRows.length === 0 && (
-                <EmptyTableRow
-                  colSpan={7}
-                  icon={Users}
-                  title="Tidak ada pengguna yang cocok"
-                  description="Ubah kata kunci atau atur ulang filter untuk melihat akun lain."
-                />
-              )}
-
-              {pageRows.map((user, index) => {
-                const meta = ROLE_META[user.peran] ?? ROLE_META.Kader;
-                const RoleIcon = meta.icon;
-                const aktif = user.status === "Aktif";
-                return (
-                  <tr key={user.id} className="transition hover:bg-slate-50/60">
-                    <td className="px-5 py-4 text-xs text-slate-400">
-                      {String((current - 1) * PAGE_SIZE + index + 1).padStart(2, "0")}
-                    </td>
-
-                    <td className="px-3 py-4">
-                      <div className="flex items-center gap-3">
-                        <span
-                          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
-                            user.peran === "Admin"
-                              ? "bg-teal-800 text-white"
-                              : AVATAR_TONES[user.id % AVATAR_TONES.length]
-                          }`}
-                        >
-                          {inisial(user.nama)}
-                        </span>
-                        <div className="min-w-0">
-                          <p className="flex flex-wrap items-center gap-1.5 font-semibold text-[#0F2942]">
-                            {user.nama}
-                            {user.badge && (
-                              <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-slate-600">
-                                {user.badge}
-                              </span>
-                            )}
-                          </p>
-                          <p className="text-[11px] text-slate-500">{user.email}</p>
-                        </div>
-                      </div>
-                    </td>
-
-                    <td className="px-3 py-4">
-                      <span className="inline-flex rounded-md bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-600">
-                        {user.username}
-                      </span>
-                    </td>
-
-                    <td className="px-3 py-4">
-                      <span
-                        className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold ${meta.badge}`}
-                      >
-                        <RoleIcon className="h-3 w-3" aria-hidden="true" />
-                        {user.peranDetail || meta.label}
-                      </span>
-                    </td>
-
-                    <td className="px-3 py-4 text-xs text-slate-600">{user.wilayah}</td>
-
-                    <td className="px-3 py-4">
-                      <span
-                        className={`inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-semibold ${
-                          aktif ? "text-teal-800" : "text-slate-500"
-                        }`}
-                      >
-                        <span
-                          className={`h-1.5 w-1.5 rounded-full ${
-                            aktif ? "bg-teal-600" : "bg-slate-400"
-                          }`}
-                          aria-hidden="true"
-                        />
-                        {user.status}
-                      </span>
-                    </td>
-
-                    <td className="px-5 py-4">
-                      <div className="flex items-center justify-end gap-1">
-                        <button
-                          type="button"
-                          onClick={() => bukaEdit(user)}
-                          aria-label={`Edit ${user.nama}`}
-                          className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-[11px] font-semibold text-slate-600 transition hover:bg-teal-50 hover:text-teal-800 focus-visible:outline-2 focus-visible:outline-teal-700"
-                        >
-                          <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
-                          Edit
-                        </button>
-
-                        {aktif ? (
-                          <button
-                            type="button"
-                            onClick={() => bukaReset(user)}
-                            aria-label={`Reset sandi ${user.nama}`}
-                            className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-[11px] font-semibold text-slate-600 transition hover:bg-teal-50 hover:text-teal-800 focus-visible:outline-2 focus-visible:outline-teal-700"
-                          >
-                            <KeyRound className="h-3.5 w-3.5" aria-hidden="true" />
-                            Reset
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => toggleStatus(user)}
-                            disabled={busyId === user.id}
-                            aria-label={`Aktifkan ${user.nama}`}
-                            className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-[11px] font-semibold text-slate-600 transition hover:bg-teal-50 hover:text-teal-800 focus-visible:outline-2 focus-visible:outline-teal-700 disabled:opacity-60"
-                          >
-                            <Power className="h-3.5 w-3.5" aria-hidden="true" />
-                            {busyId === user.id ? "Memproses" : "Aktifkan"}
-                          </button>
-                        )}
-
-                        <button
-                          type="button"
-                          onClick={() => setDeleteTarget(user)}
-                          aria-label={`Hapus ${user.nama}`}
-                          className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-[11px] font-semibold text-slate-600 transition hover:bg-red-50 hover:text-red-600 focus-visible:outline-2 focus-visible:outline-red-600"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                          Hapus
-                        </button>
-                      </div>
+        {/* Tabel pengguna */}
+        <div className="mt-5 overflow-hidden rounded-xl border border-slate-100">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[760px] text-left text-xs">
+              <thead className="border-b border-slate-100 bg-slate-50/80 text-[11px] font-semibold text-slate-600">
+                <tr>
+                  <th scope="col" className="px-5 py-3.5">
+                    <button
+                      type="button"
+                      onClick={() => toggleSort("nama")}
+                      className="inline-flex items-center gap-1.5 font-semibold transition hover:text-teal-800"
+                      aria-sort={ariaSort("nama")}
+                    >
+                      Pengguna &amp; Kontak
+                      <SortIcon active={sortKey === "nama"} direction={sortDir} />
+                    </button>
+                  </th>
+                  <th scope="col" className="px-3 py-3.5">
+                    <button
+                      type="button"
+                      onClick={() => toggleSort("peran")}
+                      className="inline-flex items-center gap-1.5 font-semibold transition hover:text-teal-800"
+                      aria-sort={ariaSort("peran")}
+                    >
+                      Peran &amp; Hak Akses
+                      <SortIcon active={sortKey === "peran"} direction={sortDir} />
+                    </button>
+                  </th>
+                  <th scope="col" className="px-3 py-3.5">
+                    Wilayah Tugas / Instansi
+                  </th>
+                  <th scope="col" className="px-3 py-3.5 text-center">
+                    <button
+                      type="button"
+                      onClick={() => toggleSort("status")}
+                      className="inline-flex items-center gap-1.5 font-semibold transition hover:text-teal-800"
+                      aria-sort={ariaSort("status")}
+                    >
+                      Status
+                      <SortIcon active={sortKey === "status"} direction={sortDir} />
+                    </button>
+                  </th>
+                  <th scope="col" className="px-5 py-3.5 text-right">
+                    Aksi
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 bg-white">
+                {isLoading ? (
+                  <tr>
+                    <td colSpan={5} className="py-12 text-center text-xs text-slate-500">
+                      <Loader2 className="mx-auto h-6 w-6 animate-spin text-teal-700" />
+                      <p className="mt-2">Memuat daftar pengguna sistem...</p>
                     </td>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                ) : users.length === 0 ? (
+                  <EmptyTableRow colSpan={5} message="Tidak ada pengguna yang cocok dengan kriteria pencarian." />
+                ) : (
+                  users.map((u, idx) => {
+                    const roleKey = u.peran || (u.role === "ADMIN" ? "Admin" : u.role === "APARATUR" ? "Aparatur" : "Kader");
+                    const roleMeta = ROLE_META[roleKey] || ROLE_META.Kader;
+                    const RoleIcon = roleMeta.icon;
+                    const tone = AVATAR_TONES[idx % AVATAR_TONES.length];
 
-        <TableFooter
-          className="border-t border-slate-100 bg-slate-50/60 text-[11px]"
-          summary={
-            <>
-              Menampilkan <b className="text-slate-900">{from}</b>–
-              <b className="text-slate-900">{to}</b> dari{" "}
-              <b className="text-slate-900">{sorted.length}</b> akun pengguna terdaftar
-            </>
-          }
-          page={current}
-          totalPages={totalPages}
-          onChange={goTo}
-        />
+                    return (
+                      <tr key={u.id} className="transition hover:bg-slate-50/60">
+                        <td className="px-5 py-4">
+                          <div className="flex items-center gap-3">
+                            <span
+                              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-xs font-bold ${tone}`}
+                              aria-hidden="true"
+                            >
+                              {inisial(u.nama || u.name)}
+                            </span>
+                            <div className="min-w-0">
+                              <p className="truncate font-bold text-[#0F2942]">
+                                {u.nama || u.name}
+                              </p>
+                              <p className="truncate text-[11px] text-slate-400">
+                                {u.email} • @{u.username}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-3 py-4">
+                          <span
+                            className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-semibold ${roleMeta.badge}`}
+                          >
+                            <RoleIcon className="h-3 w-3" aria-hidden="true" />
+                            {roleMeta.label}
+                          </span>
+                        </td>
+                        <td className="px-3 py-4 text-slate-600">
+                          <p className="truncate max-w-xs">{u.wilayah || (u.dusun?.nama ? `Dusun ${u.dusun.nama}` : "-")}</p>
+                        </td>
+                        <td className="px-3 py-4 text-center">
+                          <span
+                            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                              u.status === "Nonaktif"
+                                ? "bg-slate-100 text-slate-600"
+                                : "bg-teal-50 text-teal-800"
+                            }`}
+                          >
+                            <span
+                              className={`h-1.5 w-1.5 rounded-full ${
+                                u.status === "Nonaktif" ? "bg-slate-400" : "bg-teal-600"
+                              }`}
+                              aria-hidden="true"
+                            />
+                            {u.status || "Aktif"}
+                          </span>
+                        </td>
+                        <td className="px-5 py-4 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => konfirmasiReset(u)}
+                              title="Reset Password Pengguna"
+                              className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-teal-800"
+                            >
+                              <KeyRound className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => bukaEdit(u)}
+                              title="Edit Profil Pengguna"
+                              className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-teal-800"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => konfirmasiHapus(u)}
+                              title="Hapus Pengguna"
+                              className="rounded-lg p-1.5 text-slate-400 transition hover:bg-red-50 hover:text-red-600"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <TableFooter from={from} to={to} total={totalCount} page={page} totalPages={totalPages} onPageChange={goTo} />
+        </div>
       </section>
 
-      {/* Modal tambah / edit pengguna */}
-      {formOpen && (
-        <Modal
-          labelledBy="form-title"
-          onClose={() => !isSaving && setFormOpen(false)}
-          width="max-w-xl"
-        >
-          <div className="relative px-6 pb-5 pt-7 sm:px-8 sm:pb-6 sm:pt-8">
-            <ModalClose onClick={() => setFormOpen(false)} disabled={isSaving} />
+      {/* Modal Tambah / Edit Pengguna */}
+      <Modal
+        open={formOpen}
+        onClose={() => setFormOpen(false)}
+        title={editing ? "Perbarui Data Pengguna" : "Tambah Pengguna Baru"}
+        description="Lengkapi informasi kredensial dan hak akses akun sistem StuntingGuard Desa."
+      >
+        <form onSubmit={simpanForm} noValidate className="space-y-4">
+          <Field id="nama" label="Nama Lengkap" error={errors.nama} required>
+            <input
+              id="nama"
+              type="text"
+              value={form.nama}
+              onChange={(e) => ubahField("nama", e.target.value)}
+              placeholder="Contoh: Siti Rahmawati, S.Tr.Keb"
+              className={inputClass(!!errors.nama)}
+            />
+          </Field>
 
-            <div className="flex items-start gap-3">
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-teal-700">
-                {editing ? (
-                  <Pencil className="h-5 w-5" aria-hidden="true" />
-                ) : (
-                  <UserPlus className="h-5 w-5" aria-hidden="true" />
-                )}
-              </span>
-              <div>
-                <h2 id="form-title" className="text-xl font-bold text-[#0F2942]">
-                  {editing ? "Edit Akun Pengguna" : "Tambah Akun Baru"}
-                </h2>
-                <p className="mt-1 text-xs text-slate-500">
-                  {editing
-                    ? "Perbarui data profil dan hak akses akun pengguna."
-                    : "Lengkapi data akun baru. Kata sandi awal dibuat otomatis (simulasi)."}
-                </p>
+          <Field id="email" label="Alamat Email" error={errors.email} required>
+            <input
+              id="email"
+              type="email"
+              value={form.email}
+              onChange={(e) => ubahField("email", e.target.value)}
+              placeholder="nama@desa-sehat.id"
+              className={inputClass(!!errors.email)}
+            />
+          </Field>
+
+          {!editing && (
+            <Field
+              id="password"
+              label="Kata Sandi Awal (Opsional)"
+              hint="Kosongkan jika ingin sistem membuat kata sandi acak otomatis."
+              error={errors.password}
+            >
+              <input
+                id="password"
+                type="password"
+                value={form.password}
+                onChange={(e) => ubahField("password", e.target.value)}
+                placeholder="Minimal 6 karakter"
+                className={inputClass(!!errors.password)}
+              />
+            </Field>
+          )}
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label htmlFor="peran" className="mb-1 block text-xs font-semibold text-slate-700">
+                Peran Pengguna (Role)
+              </label>
+              <div className="relative">
+                <select
+                  id="peran"
+                  value={form.peran}
+                  onChange={(e) => ubahField("peran", e.target.value)}
+                  className="w-full appearance-none rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-3 pr-8 text-xs font-medium text-slate-800 outline-none focus:border-teal-700"
+                >
+                  <option value="Kader">Kader Posyandu</option>
+                  <option value="Aparatur">Aparatur Desa</option>
+                  <option value="Admin">Admin / Peneliti</option>
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               </div>
             </div>
 
-            <form onSubmit={simpanForm} noValidate className="mt-4 grid gap-3 sm:mt-5 sm:grid-cols-2 sm:gap-4">
-              <Field id="nama" label="Nama Lengkap" error={errors.nama} className="sm:col-span-2">
-                <input
-                  id="nama"
-                  type="text"
-                  value={form.nama}
-                  onChange={(e) => ubahField("nama", e.target.value)}
-                  placeholder="Contoh: Siti Rahmawati, S.Tr.Keb"
-                  aria-invalid={Boolean(errors.nama)}
-                  aria-describedby={errors.nama ? "nama-error" : undefined}
-                  className={inputClass}
-                />
-              </Field>
-
-              <Field id="email" label="Email" error={errors.email}>
-                <input
-                  id="email"
-                  type="email"
-                  value={form.email}
-                  onChange={(e) => ubahField("email", e.target.value)}
-                  placeholder="nama@instansi.go.id"
-                  aria-invalid={Boolean(errors.email)}
-                  aria-describedby={errors.email ? "email-error" : undefined}
-                  className={inputClass}
-                />
-              </Field>
-
-              <Field id="username" label="Username" error={errors.username}>
-                <input
-                  id="username"
-                  type="text"
-                  value={form.username}
-                  onChange={(e) => ubahField("username", e.target.value)}
-                  placeholder="nama_pengguna"
-                  aria-invalid={Boolean(errors.username)}
-                  aria-describedby={errors.username ? "username-error" : undefined}
-                  className={inputClass}
-                />
-              </Field>
-
-              <Field id="peran" label="Peran / Role">
+            {form.peran === "Kader" && (
+              <div>
+                <label htmlFor="dusunId" className="mb-1 block text-xs font-semibold text-slate-700">
+                  Penugasan Dusun
+                </label>
                 <div className="relative">
                   <select
-                    id="peran"
-                    value={form.peran}
-                    onChange={(e) => ubahField("peran", e.target.value)}
-                    className={`${inputClass} appearance-none pr-9`}
+                    id="dusunId"
+                    value={form.dusunId}
+                    onChange={(e) => ubahField("dusunId", e.target.value)}
+                    className="w-full appearance-none rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-3 pr-8 text-xs font-medium text-slate-800 outline-none focus:border-teal-700"
                   >
-                    {ROLE_OPTIONS.map((role) => (
-                      <option key={role} value={role}>
-                        {ROLE_META[role].label}
+                    <option value="">Pilih Dusun / Posyandu</option>
+                    {dusunOptions.map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.nama} ({d.rw})
                       </option>
                     ))}
                   </select>
-                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 </div>
-              </Field>
-
-              <Field id="peranDetail" label="Detail Peran (opsional)">
-                <input
-                  id="peranDetail"
-                  type="text"
-                  value={form.peranDetail}
-                  onChange={(e) => ubahField("peranDetail", e.target.value)}
-                  placeholder={ROLE_META[form.peran]?.placeholder ?? "Kader Posyandu / Bidan"}
-                  className={inputClass}
-                />
-              </Field>
-
-              <Field
-                id="wilayah"
-                label="Wilayah Tugas / Instansi"
-                error={errors.wilayah}
-                className="sm:col-span-2"
-              >
-                <input
-                  id="wilayah"
-                  type="text"
-                  value={form.wilayah}
-                  onChange={(e) => ubahField("wilayah", e.target.value)}
-                  placeholder="Contoh: Posyandu Melati 1 (RW 02)"
-                  aria-invalid={Boolean(errors.wilayah)}
-                  aria-describedby={errors.wilayah ? "wilayah-error" : undefined}
-                  className={inputClass}
-                />
-              </Field>
-
-              <fieldset className="sm:col-span-2">
-                <legend className="text-[11px] font-bold uppercase tracking-wide text-slate-500">
-                  Status Akun
-                </legend>
-                <div className="mt-2 flex gap-2">
-                  {["Aktif", "Nonaktif"].map((status) => (
-                    <button
-                      key={status}
-                      type="button"
-                      onClick={() => ubahField("status", status)}
-                      aria-pressed={form.status === status}
-                      className={`rounded-xl px-4 py-2 text-xs font-semibold transition focus-visible:outline-2 focus-visible:outline-teal-700 ${
-                        form.status === status
-                          ? "bg-teal-800 text-white"
-                          : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                      }`}
-                    >
-                      {status}
-                    </button>
-                  ))}
-                </div>
-              </fieldset>
-
-              <div className="mt-2 grid gap-3 sm:col-span-2 sm:grid-cols-2 max-sm:sticky max-sm:bottom-0 max-sm:z-10 max-sm:-mx-6 max-sm:-mb-5 max-sm:mt-1 max-sm:border-t max-sm:border-slate-100 max-sm:bg-white max-sm:px-6 max-sm:pb-4 max-sm:pt-3">
-                <button
-                  type="button"
-                  onClick={() => setFormOpen(false)}
-                  disabled={isSaving}
-                  className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-teal-700 disabled:opacity-60"
-                >
-                  Batal
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSaving}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-teal-800 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-teal-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700 disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                  {isSaving ? (
-                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                  ) : (
-                    <Check className="h-4 w-4" aria-hidden="true" />
-                  )}
-                  {isSaving
-                    ? "Menyimpan..."
-                    : editing
-                      ? "Simpan Perubahan"
-                      : "Tambah Akun"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </Modal>
-      )}
-
-      {/* Modal hapus pengguna */}
-      {deleteTarget && (
-        <Modal
-          labelledBy="delete-title"
-          onClose={() => !isDeleting && setDeleteTarget(null)}
-          width="max-w-md"
-        >
-          <div className="relative px-6 pb-6 pt-8 sm:px-7">
-            <ModalClose onClick={() => setDeleteTarget(null)} disabled={isDeleting} />
-
-            <div className="text-center">
-              <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-red-50 text-red-600">
-                <AlertTriangle className="h-7 w-7" aria-hidden="true" />
-              </span>
-              <h2 id="delete-title" className="mt-4 text-xl font-bold text-[#0F2942]">
-                Hapus Akun Pengguna?
-              </h2>
-              <p className="mx-auto mt-1.5 max-w-sm text-sm leading-relaxed text-slate-500">
-                Akun <b className="text-slate-800">{deleteTarget.nama}</b> (
-                {deleteTarget.username}) akan dihapus dari daftar pengguna. Tindakan ini tidak
-                dapat dibatalkan.
-              </p>
-            </div>
-
-            <p className="mt-5 rounded-xl bg-red-50/60 px-4 py-3 text-[11px] font-medium text-red-700">
-              Riwayat prediksi yang pernah dibuat akun ini tetap tersimpan pada sistem (simulasi).
-            </p>
-
-            <div className="mt-6 grid gap-3 sm:grid-cols-2">
-              <button
-                type="button"
-                onClick={() => setDeleteTarget(null)}
-                disabled={isDeleting}
-                className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-teal-700 disabled:opacity-60"
-              >
-                Batal
-              </button>
-              <button
-                type="button"
-                onClick={konfirmasiHapus}
-                disabled={isDeleting}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-red-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 disabled:cursor-not-allowed disabled:opacity-70"
-              >
-                {isDeleting ? (
-                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                ) : (
-                  <Trash2 className="h-4 w-4" aria-hidden="true" />
-                )}
-                {isDeleting ? "Menghapus..." : "Hapus Akun"}
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
-
-      {/* Modal reset kata sandi */}
-      {resetTarget && (
-        <Modal
-          labelledBy="reset-title"
-          onClose={() => !resetState.loading && setResetTarget(null)}
-          width="max-w-md"
-        >
-          <div className="relative px-6 pb-6 pt-8 sm:px-7">
-            <ModalClose onClick={() => setResetTarget(null)} disabled={resetState.loading} />
-
-            <div className="text-center">
-              <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-teal-50 text-teal-700">
-                <KeyRound className="h-7 w-7" aria-hidden="true" />
-              </span>
-              <h2 id="reset-title" className="mt-4 text-xl font-bold text-[#0F2942]">
-                Reset Kata Sandi
-              </h2>
-              <p className="mx-auto mt-1.5 max-w-sm text-sm leading-relaxed text-slate-500">
-                Sandi sementara akan dibuat untuk{" "}
-                <b className="text-slate-800">{resetTarget.nama}</b> ({resetTarget.username}).
-                Pengguna wajib menggantinya saat masuk berikutnya.
-              </p>
-            </div>
-
-            {resetState.password ? (
-              <>
-                <div className="mt-5 rounded-xl border border-dashed border-teal-200 bg-teal-50/50 px-4 py-4 text-center">
-                  <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
-                    Sandi sementara
-                  </p>
-                  <div className="mt-1 flex items-center justify-center gap-1.5">
-                    <code className="text-lg font-bold tracking-[0.18em] text-teal-900">
-                      {resetState.password}
-                    </code>
-                    <button
-                      type="button"
-                      onClick={salinSandi}
-                      aria-label="Salin sandi sementara"
-                      title="Salin sandi"
-                      className="rounded-lg p-1.5 text-teal-700 transition hover:bg-white focus-visible:outline-2 focus-visible:outline-teal-700"
-                    >
-                      <Copy className="h-4 w-4" aria-hidden="true" />
-                    </button>
-                  </div>
-                  {resetState.copied && (
-                    <p className="mt-1 text-[10px] font-semibold text-teal-700">
-                      Tersalin ke papan klip
-                    </p>
-                  )}
-                </div>
-
-                <p className="mt-3 text-center text-[11px] text-slate-500">
-                  Sandi berlaku 24 jam dan tidak ditampilkan lagi setelah dialog ditutup
-                  (simulasi).
-                </p>
-
-                <button
-                  type="button"
-                  onClick={() => setResetTarget(null)}
-                  className="mt-6 w-full rounded-xl bg-teal-800 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-teal-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
-                >
-                  Selesai
-                </button>
-              </>
-            ) : (
-              <div className="mt-6 grid gap-3 sm:grid-cols-2">
-                <button
-                  type="button"
-                  onClick={() => setResetTarget(null)}
-                  disabled={resetState.loading}
-                  className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-teal-700 disabled:opacity-60"
-                >
-                  Batal
-                </button>
-                <button
-                  type="button"
-                  onClick={mulaiReset}
-                  disabled={resetState.loading}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-teal-800 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-teal-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700 disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                  {resetState.loading ? (
-                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                  ) : (
-                    <KeyRound className="h-4 w-4" aria-hidden="true" />
-                  )}
-                  {resetState.loading ? "Membuat sandi..." : "Buat Sandi"}
-                </button>
               </div>
             )}
           </div>
-        </Modal>
-      )}
+
+          <div className="mt-6 flex justify-end gap-3 pt-3 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={() => setFormOpen(false)}
+              className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
+            >
+              Batal
+            </button>
+            <button
+              type="submit"
+              disabled={isSaving}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-teal-800 px-5 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-teal-900 disabled:opacity-75"
+            >
+              {isSaving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              {editing ? "Simpan Perubahan" : "Buat Akun"}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Modal Reset Password */}
+      <Modal
+        open={!!resetTarget}
+        onClose={() => setResetTarget(null)}
+        title="Reset Kata Sandi Pengguna"
+        description={`Setel ulang kata sandi sementara untuk akun ${resetTarget?.nama || resetTarget?.name}.`}
+      >
+        <div className="space-y-4">
+          {resetState.password ? (
+            <div className="rounded-xl border border-teal-200 bg-teal-50 p-4">
+              <p className="text-xs font-semibold text-teal-800">
+                Kata Sandi Sementara Berhasil Dibuat:
+              </p>
+              <div className="mt-2 flex items-center justify-between rounded-lg bg-white p-3 font-mono text-sm font-bold tracking-wider text-teal-900 border border-teal-200">
+                <span>{resetState.password}</span>
+                <button
+                  type="button"
+                  onClick={salinSandi}
+                  className="inline-flex items-center gap-1 rounded bg-teal-100 px-2 py-1 text-xs font-semibold text-teal-800 transition hover:bg-teal-200"
+                >
+                  {resetState.copied ? (
+                    <>
+                      <Check className="h-3.5 w-3.5" /> Tersalin
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="h-3.5 w-3.5" /> Salin
+                    </>
+                  )}
+                </button>
+              </div>
+              <p className="mt-2 text-[11px] text-teal-700">
+                Berikan kata sandi ini kepada pengguna bersangkutan untuk login pertama kali.
+              </p>
+            </div>
+          ) : (
+            <p className="text-xs text-slate-600">
+              Apakah Anda yakin ingin menyetel ulang kata sandi akun{" "}
+              <b>{resetTarget?.nama || resetTarget?.name}</b> ({resetTarget?.email})? Sistem akan
+              menghasilkan kata sandi acak baru yang aman.
+            </p>
+          )}
+
+          <div className="mt-6 flex justify-end gap-3 pt-3 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={() => setResetTarget(null)}
+              className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
+            >
+              {resetState.password ? "Tutup" : "Batal"}
+            </button>
+            {!resetState.password && (
+              <button
+                type="button"
+                onClick={eksekusiReset}
+                disabled={resetState.loading}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-teal-800 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-teal-900 disabled:opacity-75"
+              >
+                {resetState.loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                {resetState.loading ? "Mereset..." : "Konfirmasi Reset"}
+              </button>
+            )}
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal Hapus Pengguna */}
+      <Modal
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        title="Hapus Akun Pengguna"
+        description="Tindakan ini permanen dan akan menghapus akses login pengguna ke sistem."
+      >
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-xs font-semibold text-red-700">
+            <AlertTriangle className="h-5 w-5 shrink-0 text-red-600" />
+            <span>
+              Perhatian: Akun <b>{deleteTarget?.nama || deleteTarget?.name}</b> akan dihapus secara
+              permanen dari sistem.
+            </span>
+          </div>
+
+          <div className="mt-6 flex justify-end gap-3 pt-3 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={() => setDeleteTarget(null)}
+              className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
+            >
+              Batal
+            </button>
+            <button
+              type="button"
+              onClick={eksekusiHapus}
+              disabled={isDeleting}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-red-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-red-700 disabled:opacity-75"
+            >
+              {isDeleting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              {isDeleting ? "Menghapus..." : "Hapus Pengguna"}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
