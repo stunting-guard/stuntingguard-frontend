@@ -1,5 +1,6 @@
 // src/pages/aparatur/HasilPrediksi.jsx
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   Printer,
   RotateCw,
@@ -14,12 +15,16 @@ import {
   Users,
   CalendarDays,
   Flame,
+  Loader2,
+  AlertCircle,
 } from "lucide-react";
+import { api } from "../../services/api";
 
 /* ------------------------------------------------------------------ */
-/* Mock data (ganti dengan response API hasil klasifikasi Random Forest) */
+/* Fallback data                                                      */
 /* ------------------------------------------------------------------ */
-const MOCK_HASIL = {
+const DEFAULT_HASIL = {
+  id: 42,
   status: "Tinggi",
   judul: "Balita Terindikasi Berisiko Tinggi Stunting",
   deskripsi:
@@ -81,6 +86,17 @@ const INTERVENSI_TONE = {
   },
 };
 
+function resolveIntervensiVisual(item, idx = 0) {
+  const isAmber = idx % 2 === 1 || String(item.tag || "").toLowerCase().includes("protein");
+  const isFlame = String(item.tag || item.judul || "").toLowerCase().includes("pmt");
+  return {
+    ...item,
+    id: item.id || idx + 1,
+    tone: item.tone || (isAmber ? "amber" : "teal"),
+    footerIcon: item.footerIcon || (isFlame ? Flame : CalendarDays),
+  };
+}
+
 /* ------------------------------------------------------------------ */
 /* Sub-komponen lokal                                                  */
 /* ------------------------------------------------------------------ */
@@ -122,13 +138,75 @@ function ParamCard({ label, icon: Icon, accent, children, footer }) {
 /* Halaman                                                             */
 /* ------------------------------------------------------------------ */
 export default function HasilPrediksi() {
-  const [hasil] = useState(MOCK_HASIL);
+  const { id } = useParams();
+  const navigate = useNavigate();
+
+  const [hasil, setHasil] = useState(DEFAULT_HASIL);
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState("");
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function fetchDetail() {
+      setIsLoading(true);
+      setErrorMessage("");
+
+      try {
+        let targetId = id;
+
+        // Jika tidak ada ID di URL, cari balita prioritas pertama dari laporan
+        if (!targetId) {
+          const lapRes = await api.get("/aparatur/laporan").catch(() => null);
+          if (lapRes?.success && Array.isArray(lapRes.data?.balitaPrioritas) && lapRes.data.balitaPrioritas.length > 0) {
+            targetId = lapRes.data.balitaPrioritas[0].id;
+          }
+        }
+
+        if (targetId) {
+          const res = await api.get(`/aparatur/hasil-prediksi/${targetId}`);
+          if (!isMounted) return;
+
+          if (res?.success && res?.data) {
+            const d = res.data;
+            const mapped = {
+              ...d,
+              intervensi: Array.isArray(d.intervensi)
+                ? d.intervensi.map(resolveIntervensiVisual)
+                : DEFAULT_HASIL.intervensi,
+            };
+            setHasil(mapped);
+            return;
+          }
+        }
+
+        // Fallback default
+        if (isMounted) {
+          setHasil(DEFAULT_HASIL);
+        }
+      } catch (err) {
+        if (!isMounted) return;
+        setErrorMessage(
+          err?.data?.message || err?.message || "Gagal memuat detail data balita."
+        );
+        setHasil(DEFAULT_HASIL);
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    }
+
+    fetchDetail();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [id]);
+
   const { balita, tinggiBadan, beratBadan, lingkungan } = hasil;
 
   const handlePrint = () => window.print();
   const handleInputBaru = () => {
-    // TODO: navigate("/aparatur/prediksi-baru") atau buka form input
-    console.log("Input prediksi baru");
+    navigate("/kader/input-data");
   };
 
   return (
@@ -143,8 +221,27 @@ export default function HasilPrediksi() {
           <span className="text-slate-400">&gt;</span>
           <span className="text-red-600">Hasil Prediksi</span>
         </nav>
-        <h1 className="mt-2 text-2xl font-bold text-slate-900">Hasil Evaluasi & Klasifikasi Risiko</h1>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h1 className="mt-2 text-2xl font-bold text-slate-900">
+            Hasil Evaluasi &amp; Klasifikasi Risiko
+          </h1>
+          {isLoading && (
+            <span className="inline-flex items-center gap-1.5 text-xs text-slate-400">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Memuat data...
+            </span>
+          )}
+        </div>
       </section>
+
+      {errorMessage && (
+        <div
+          role="alert"
+          className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs font-semibold text-amber-800"
+        >
+          <AlertCircle className="h-4 w-4 shrink-0 text-amber-600" />
+          <span>{errorMessage} (Menampilkan data acuan sistem)</span>
+        </div>
+      )}
 
       {/* Hasil klasifikasi */}
       <section className="rounded-2xl border border-red-100 bg-gradient-to-r from-red-50 via-white to-amber-50 p-6 shadow-sm">
@@ -185,7 +282,7 @@ export default function HasilPrediksi() {
         <div className="mt-6 flex flex-col gap-4 border-t border-red-100 pt-5 md:flex-row md:items-center md:justify-between">
           <p className="flex items-center gap-2 text-xs text-slate-500">
             <CircleCheck className="h-4 w-4 text-teal-700" />
-            Klasifikasi tervalidasi siap untuk pelaporan posyandu & sidang tugas akhir.
+            Klasifikasi tervalidasi siap untuk pelaporan posyandu &amp; sidang tugas akhir.
           </p>
           <div className="flex flex-wrap gap-3">
             <button
@@ -210,7 +307,11 @@ export default function HasilPrediksi() {
 
       {/* Data balita & variabel */}
       <section className="space-y-4">
-        <SectionTitle icon={ClipboardList} title="Data Balita & Variabel Pengukuran" badge="4 Parameter Kunci" />
+        <SectionTitle
+          icon={ClipboardList}
+          title="Data Balita & Variabel Pengukuran"
+          badge="4 Parameter Kunci"
+        />
 
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <ParamCard
@@ -299,8 +400,8 @@ export default function HasilPrediksi() {
 
         <div className="grid gap-4 lg:grid-cols-2">
           {hasil.intervensi.map((item) => {
-            const tone = INTERVENSI_TONE[item.tone];
-            const FooterIcon = item.footerIcon;
+            const tone = INTERVENSI_TONE[item.tone] || INTERVENSI_TONE.teal;
+            const FooterIcon = item.footerIcon || CalendarDays;
             return (
               <article key={item.id} className={`rounded-2xl border p-5 shadow-sm ${tone.card}`}>
                 <div className="flex gap-4">

@@ -1,4 +1,4 @@
-﻿import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   AlertCircle,
@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import posyanduPhoto from "../../assets/images/login-posyandu.jpg";
 import bgAnak from "../../assets/images/login-bg-anak.jpg";
+import { api, getToken, getUser } from "../../services/api";
 
 /* ------------------------------------------------------------------ */
 /* MOCK DATA — ganti dengan response API saat backend sudah siap        */
@@ -127,6 +128,18 @@ export default function LoginPage({ variant = "v1" }) {
     };
   }, [showSuggestions]);
 
+  // Arahkan ke dashboard jika sudah memiliki sesi login aktif
+  useEffect(() => {
+    const token = getToken();
+    const user = getUser();
+    if (token && user?.role) {
+      const roleUpper = String(user.role).toUpperCase();
+      if (roleUpper === "KADER") navigate("/kader/dashboard", { replace: true });
+      else if (roleUpper === "APARATUR") navigate("/aparatur/dashboard", { replace: true });
+      else if (roleUpper === "ADMIN") navigate("/admin/dashboard", { replace: true });
+    }
+  }, [navigate]);
+
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     setError("");
@@ -139,25 +152,32 @@ export default function LoginPage({ variant = "v1" }) {
     setError("");
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.email || !form.password) {
       setError("Email dan password wajib diisi.");
       return;
     }
     setIsLoading(true);
-    // TODO: ganti dengan request ke backend (POST /api/auth/login)
-    setTimeout(() => {
-      const match = SAVED_ACCOUNTS.find(
-        (a) => a.email === form.email && a.password === form.password
+    setError("");
+
+    try {
+      const res = await api.login({
+        email: form.email,
+        password: form.password,
+        remember: form.remember,
+      });
+
+      const redirectTo = res?.data?.redirectTo || "/login";
+      navigate(redirectTo);
+    } catch (err) {
+      setError(
+        err?.message ||
+          "Email atau password salah. Periksa kembali lalu coba lagi."
       );
+    } finally {
       setIsLoading(false);
-      if (!match) {
-        setError("Email atau password salah. Periksa kembali lalu coba lagi.");
-        return;
-      }
-      navigate(match.redirectTo);
-    }, 800);
+    }
   };
 
   const filteredAccounts = SAVED_ACCOUNTS.filter((a) =>

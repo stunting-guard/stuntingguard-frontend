@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { BarChart3, ClipboardCheck, History, UserPlus } from "lucide-react";
 import DashboardLayout from "./DashboardLayout";
+import { getUser } from "../services/api";
 
 const NAV_ITEMS = [
   { to: "/kader/dashboard", label: "Dashboard Analitik", short: "Dashboard", icon: BarChart3 },
@@ -10,8 +11,11 @@ const NAV_ITEMS = [
 ];
 
 export default function KaderLayout() {
-  // MOCK — ganti dengan data user dari auth context / API
-  const [user] = useState({ name: "Bidan Sri Wahyuni", role: "Kader Posyandu" });
+  const sessionUser = getUser();
+  const [user] = useState({
+    name: sessionUser?.name || "Bidan Sri Wahyuni",
+    role: sessionUser?.role === "KADER" ? "Kader Posyandu" : sessionUser?.role || "Kader Posyandu",
+  });
 
   return <DashboardLayout navItems={NAV_ITEMS} user={user} />;
 }

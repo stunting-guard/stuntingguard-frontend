@@ -1,11 +1,14 @@
 // src/pages/aparatur/Laporan.jsx
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   FileSpreadsheet,
   Printer,
   CircleCheck,
   BadgeCheck,
+  Loader2,
+  Download,
 } from "lucide-react";
+import { api } from "../../services/api";
 
 /* ------------------------------------------------------------------ */
 /* Style status (class ditulis penuh agar terdeteksi Tailwind v4)       */
@@ -35,16 +38,16 @@ const PRIORITAS_STYLE = {
 };
 
 /* ------------------------------------------------------------------ */
-/* Mock data                                                           */
+/* Fallback data                                                      */
 /* ------------------------------------------------------------------ */
-const MOCK_RINGKASAN = {
+const DEFAULT_RINGKASAN = {
   totalSasaran: 438,
   berisiko: 54,
   paketPmt: 54,
   targetEliminasi: 2025,
 };
 
-const MOCK_WILAYAH = [
+const DEFAULT_WILAYAH = [
   {
     id: 1,
     dusun: "Dusun Melati",
@@ -79,7 +82,7 @@ const MOCK_WILAYAH = [
   },
 ];
 
-const MOCK_BALITA_PRIORITAS = [
+const DEFAULT_BALITA_PRIORITAS = [
   {
     id: 1,
     nama: "Muhammad Rizky",
@@ -146,7 +149,7 @@ function StatCard({ label, pill, pillCls, children, caption, progress, progressC
       <div className={`mt-3 h-2 w-full overflow-hidden rounded-full ${trackCls}`}>
         <div
           className={`h-full rounded-full ${progressCls}`}
-          style={{ width: `${progress}%` }}
+          style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
         />
       </div>
     </div>
@@ -154,7 +157,7 @@ function StatCard({ label, pill, pillCls, children, caption, progress, progressC
 }
 
 function WilayahRow({ item, totalKasus }) {
-  const s = PRIORITAS_STYLE[item.tone];
+  const s = PRIORITAS_STYLE[item.tone] || PRIORITAS_STYLE.hijau;
   const width = totalKasus ? (item.kasus / totalKasus) * 100 : 0;
 
   return (
@@ -182,18 +185,90 @@ function WilayahRow({ item, totalKasus }) {
 /* Halaman                                                             */
 /* ------------------------------------------------------------------ */
 export default function Laporan() {
-  const [ringkasan] = useState(MOCK_RINGKASAN);
-  const [wilayah] = useState(MOCK_WILAYAH);
-  const [balitaPrioritas] = useState(MOCK_BALITA_PRIORITAS);
+  const [ringkasan, setRingkasan] = useState(DEFAULT_RINGKASAN);
+  const [wilayah, setWilayah] = useState(DEFAULT_WILAYAH);
+  const [balitaPrioritas, setBalitaPrioritas] = useState(DEFAULT_BALITA_PRIORITAS);
+
+  const [isLoading, setIsLoading] = useState(true);
+  const [isExportingExcel, setIsExportingExcel] = useState(false);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadLaporan() {
+      setIsLoading(true);
+      try {
+        const res = await api.get("/aparatur/laporan");
+        if (!isMounted) return;
+
+        if (res?.success && res?.data) {
+          if (res.data.ringkasan) {
+            setRingkasan(res.data.ringkasan);
+          }
+          if (Array.isArray(res.data.wilayah) && res.data.wilayah.length > 0) {
+            setWilayah(res.data.wilayah);
+          }
+          if (Array.isArray(res.data.balitaPrioritas) && res.data.balitaPrioritas.length > 0) {
+            setBalitaPrioritas(
+              res.data.balitaPrioritas.map((b, idx) => ({
+                ...b,
+                aksen: b.risiko === "Tinggi" || idx < 3,
+              }))
+            );
+          }
+        }
+      } catch {
+        // Fallback default
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    }
+
+    loadLaporan();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const totalKasus = useMemo(() => wilayah.reduce((a, d) => a + d.kasus, 0), [wilayah]);
-  const persenBerisiko = Math.round((ringkasan.berisiko / ringkasan.totalSasaran) * 100);
-  const persenBerisikoBar = (ringkasan.berisiko / ringkasan.totalSasaran) * 100;
+  const persenBerisiko = ringkasan.totalSasaran
+    ? Math.round((ringkasan.berisiko / ringkasan.totalSasaran) * 100)
+    : 0;
+  const persenBerisikoBar = ringkasan.totalSasaran
+    ? (ringkasan.berisiko / ringkasan.totalSasaran) * 100
+    : 0;
 
-  const handleExportExcel = () => {
-    // TODO: sambungkan ke endpoint ekspor .xlsx setelah backend siap
-    console.log("Ekspor Excel");
+  const handleExportExcel = async () => {
+    setIsExportingExcel(true);
+    try {
+      await api.downloadBlob(
+        "/laporan/export?module=laporan&format=xlsx",
+        `Laporan-Ringkasan-Stunting-${new Date().toISOString().slice(0, 10)}.xlsx`
+      );
+    } catch {
+      alert("Gagal mengunduh berkas Excel. Pastikan sesi login aktif.");
+    } finally {
+      setIsExportingExcel(false);
+    }
   };
+
+  const handleExportPdf = async () => {
+    setIsExportingPdf(true);
+    try {
+      await api.downloadBlob(
+        "/laporan/export?module=laporan&format=pdf",
+        `Laporan-Ringkasan-Stunting-${new Date().toISOString().slice(0, 10)}.pdf`
+      );
+    } catch {
+      // Fallback ke window.print jika backend PDF belum aktif
+      window.print();
+    } finally {
+      setIsExportingPdf(false);
+    }
+  };
+
   const handlePrint = () => window.print();
 
   return (
@@ -210,17 +285,44 @@ export default function Laporan() {
               <span className="text-slate-400">&gt;</span>
               <span className="text-red-600">Laporan</span>
             </nav>
-            <h1 className="mt-2 text-2xl font-bold text-slate-900">Laporan Ringkasan Stunting</h1>
+            <div className="flex flex-wrap items-center gap-3">
+              <h1 className="mt-2 text-2xl font-bold text-slate-900">
+                Laporan Ringkasan Stunting
+              </h1>
+              {isLoading && (
+                <span className="inline-flex items-center gap-1.5 text-xs text-slate-400">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> Memuat data laporan...
+                </span>
+              )}
+            </div>
           </div>
 
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
               onClick={handleExportExcel}
-              className="inline-flex items-center gap-2 rounded-xl border border-teal-100 bg-teal-50 px-4 py-2.5 text-sm font-semibold text-teal-800 transition hover:bg-teal-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-700 focus-visible:ring-offset-2"
+              disabled={isExportingExcel}
+              className="inline-flex items-center gap-2 rounded-xl border border-teal-100 bg-teal-50 px-4 py-2.5 text-sm font-semibold text-teal-800 transition hover:bg-teal-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-700 focus-visible:ring-offset-2 disabled:opacity-75"
             >
-              <FileSpreadsheet className="h-4 w-4" />
-              Ekspor Excel (.xlsx)
+              {isExportingExcel ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <FileSpreadsheet className="h-4 w-4" />
+              )}
+              {isExportingExcel ? "Mengekspor..." : "Ekspor Excel (.xlsx)"}
+            </button>
+            <button
+              type="button"
+              onClick={handleExportPdf}
+              disabled={isExportingPdf}
+              className="inline-flex items-center gap-2 rounded-xl border border-teal-700 bg-white px-4 py-2.5 text-sm font-semibold text-teal-700 transition hover:bg-teal-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-700 focus-visible:ring-offset-2 disabled:opacity-75"
+            >
+              {isExportingPdf ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="h-4 w-4" />
+              )}
+              {isExportingPdf ? "Mengunduh..." : "Unduh PDF"}
             </button>
             <button
               type="button"
@@ -228,7 +330,7 @@ export default function Laporan() {
               className="inline-flex items-center gap-2 rounded-xl bg-teal-800 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-teal-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-700 focus-visible:ring-offset-2"
             >
               <Printer className="h-4 w-4" />
-              Cetak / Unduh PDF
+              Cetak Dokumen
             </button>
           </div>
         </div>
@@ -353,7 +455,7 @@ export default function Laporan() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {balitaPrioritas.map((b) => {
-                  const r = RISIKO_BADGE[b.risiko];
+                  const r = RISIKO_BADGE[b.risiko] || RISIKO_BADGE.Tinggi;
                   return (
                     <tr key={b.id}>
                       <td className="px-3 py-3 font-bold text-slate-900">{b.nama}</td>
@@ -386,7 +488,7 @@ export default function Laporan() {
             <div className="flex flex-col gap-2 rounded-xl border border-sky-100 bg-sky-50 px-4 py-3 text-xs sm:flex-row sm:items-center sm:justify-between">
               <p className="flex items-center gap-2 font-bold text-slate-900">
                 <BadgeCheck className="h-4 w-4 text-teal-700" />
-                Validasi Bidan Desa & Kepala Desa Sukamaju Terpenuhi
+                Validasi Bidan Desa &amp; Kepala Desa Sukamaju Terpenuhi
               </p>
               <p className="font-semibold text-teal-800">Siap Diujikan Sidang Skripsi</p>
             </div>

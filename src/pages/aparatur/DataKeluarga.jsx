@@ -1,5 +1,5 @@
 // src/pages/aparatur/DataKeluarga.jsx
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Printer,
   Download,
@@ -12,19 +12,23 @@ import {
   Droplets,
   GraduationCap,
   Info,
+  Loader2,
+  Search,
+  Filter,
 } from "lucide-react";
+import { api } from "../../services/api";
 
 /* ------------------------------------------------------------------ */
-/* Mock data (ganti dengan response API setelah backend siap)          */
+/* Fallback data                                                      */
 /* ------------------------------------------------------------------ */
-const MOCK_DUSUN = [
+const DEFAULT_DUSUN = [
   { id: 1, nama: "Dusun Melati", total: 340, tinggi: 48, sedang: 82, rendah: 210 },
   { id: 2, nama: "Dusun Mawar", total: 310, tinggi: 42, sedang: 78, rendah: 190 },
   { id: 3, nama: "Dusun Kenanga", total: 300, tinggi: 32, sedang: 68, rendah: 200 },
   { id: 4, nama: "Dusun Cempaka", total: 298, tinggi: 28, sedang: 58, rendah: 212 },
 ];
 
-const MOCK_FAKTOR = [
+const DEFAULT_FAKTOR = [
   {
     id: "pendapatan",
     judul: "Pendapatan & Ketahanan Pangan",
@@ -78,6 +82,52 @@ const pctLabel = (n, total) => {
   const v = pct(n, total);
   return `${Number.isInteger(Math.round(v * 10) / 10) ? Math.round(v) : v.toFixed(1)}%`;
 };
+
+function resolveFaktorMeta(item) {
+  const idLower = String(item.id || item.judul || "").toLowerCase();
+  let icon = Banknote;
+  let tone = {
+    text: "text-rose-600",
+    chip: "bg-rose-50",
+    iconBox: "bg-rose-50 text-rose-500",
+    bar: "bg-rose-500",
+  };
+
+  if (idLower.includes("sanitasi") || idLower.includes("jamban")) {
+    icon = Droplets;
+    tone = {
+      text: "text-amber-600",
+      chip: "bg-amber-50",
+      iconBox: "bg-amber-50 text-amber-500",
+      bar: "bg-amber-500",
+    };
+  } else if (idLower.includes("air") || idLower.includes("sumur")) {
+    icon = Droplets;
+    tone = {
+      text: "text-sky-600",
+      chip: "bg-sky-50",
+      iconBox: "bg-sky-50 text-sky-500",
+      bar: "bg-sky-500",
+    };
+  } else if (idLower.includes("pendidikan") || idLower.includes("pola asuh") || idLower.includes("gizi")) {
+    icon = GraduationCap;
+    tone = {
+      text: "text-teal-700",
+      chip: "bg-teal-50",
+      iconBox: "bg-teal-50 text-teal-700",
+      bar: "bg-teal-700",
+    };
+  }
+
+  return {
+    id: item.id || idLower,
+    judul: item.judul || "Faktor Penentu",
+    deskripsi: item.deskripsi || "Variabel penentu klasifikasi stunting",
+    persen: Number(item.persen) || 0,
+    icon: item.icon || icon,
+    tone: item.tone || tone,
+  };
+}
 
 /* ------------------------------------------------------------------ */
 /* Sub-komponen lokal                                                  */
@@ -212,8 +262,51 @@ function FaktorItem({ faktor }) {
 /* Halaman                                                             */
 /* ------------------------------------------------------------------ */
 export default function DataKeluarga() {
-  const [dusunList] = useState(MOCK_DUSUN);
-  const [faktorList] = useState(MOCK_FAKTOR);
+  const [dusunList, setDusunList] = useState(DEFAULT_DUSUN);
+  const [faktorList, setFaktorList] = useState(DEFAULT_FAKTOR);
+  const [search, setSearch] = useState("");
+  const [filterZona, setFilterZona] = useState("Semua");
+  const [isLoading, setIsLoading] = useState(true);
+  const [isExporting, setIsExporting] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function fetchData() {
+      setIsLoading(true);
+      try {
+        const params = {
+          search: search.trim() || undefined,
+          zona: filterZona !== "Semua" ? filterZona : undefined,
+        };
+
+        const res = await api.get("/aparatur/data-keluarga", params);
+        if (!isMounted) return;
+
+        if (res?.success && res?.data) {
+          if (Array.isArray(res.data.dusun)) {
+            setDusunList(res.data.dusun);
+          }
+          if (Array.isArray(res.data.faktor) && res.data.faktor.length > 0) {
+            setFaktorList(res.data.faktor.map(resolveFaktorMeta));
+          }
+        }
+      } catch {
+        // Gunakan state fallback
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    }
+
+    const timer = setTimeout(() => {
+      fetchData();
+    }, 250);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
+  }, [search, filterZona]);
 
   const summary = useMemo(() => {
     const total = dusunList.reduce((a, d) => a + d.total, 0);
@@ -224,14 +317,27 @@ export default function DataKeluarga() {
   }, [dusunList]);
 
   const dusunTertinggi = useMemo(
-    () => dusunList.reduce((max, d) => (d.tinggi > max.tinggi ? d : max), dusunList[0]),
+    () =>
+      dusunList.length > 0
+        ? dusunList.reduce((max, d) => (d.tinggi > max.tinggi ? d : max), dusunList[0])
+        : { nama: "-", tinggi: 0 },
     [dusunList]
   );
 
   const handlePrint = () => window.print();
-  const handleDownload = () => {
-    // TODO: sambungkan ke endpoint laporan (PDF/Excel) setelah backend siap
-    console.log("Unduh laporan Data Keluarga");
+
+  const handleDownload = async () => {
+    setIsExporting(true);
+    try {
+      await api.downloadBlob(
+        "/laporan/export?module=data-keluarga&format=xlsx",
+        `Rekap-Data-Keluarga-${new Date().toISOString().slice(0, 10)}.xlsx`
+      );
+    } catch {
+      alert("Gagal mengunduh berkas laporan Excel. Pastikan sesi login aktif.");
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   return (
@@ -254,7 +360,7 @@ export default function DataKeluarga() {
             </p>
           </div>
 
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
               onClick={handlePrint}
@@ -266,11 +372,51 @@ export default function DataKeluarga() {
             <button
               type="button"
               onClick={handleDownload}
-              className="inline-flex items-center gap-2 rounded-xl bg-teal-800 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-teal-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-700 focus-visible:ring-offset-2"
+              disabled={isExporting}
+              className="inline-flex items-center gap-2 rounded-xl bg-teal-800 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-teal-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-700 focus-visible:ring-offset-2 disabled:opacity-75"
             >
-              <Download className="h-4 w-4" />
-              Unduh Laporan
+              {isExporting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="h-4 w-4" />
+              )}
+              {isExporting ? "Mengunduh..." : "Unduh Laporan"}
             </button>
+          </div>
+        </div>
+
+        {/* Filter bar pencarian & zona */}
+        <div className="mt-6 flex flex-col gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="relative flex-1 max-w-md">
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input
+              type="search"
+              placeholder="Cari kepala keluarga atau balita..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full rounded-xl bg-slate-50 py-2 pl-10 pr-4 text-xs text-slate-800 placeholder:text-slate-400 outline-none ring-1 ring-slate-200 transition focus:bg-white focus:ring-2 focus:ring-teal-600"
+            />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-500">
+              <Filter className="h-3.5 w-3.5" />
+              Zona:
+            </span>
+            {["Semua", "Merah", "Kuning", "Hijau"].map((z) => (
+              <button
+                key={z}
+                type="button"
+                onClick={() => setFilterZona(z)}
+                className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                  filterZona === z
+                    ? "bg-teal-800 text-white"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                }`}
+              >
+                {z}
+              </button>
+            ))}
           </div>
         </div>
       </section>
@@ -366,9 +512,18 @@ export default function DataKeluarga() {
           </div>
 
           <div className="mt-5 space-y-3 border-t border-slate-100 pt-5">
-            {dusunList.map((dusun) => (
-              <DusunRow key={dusun.id} dusun={dusun} />
-            ))}
+            {isLoading ? (
+              <div className="flex min-h-[160px] flex-col items-center justify-center gap-2">
+                <Loader2 className="h-6 w-6 animate-spin text-teal-700" />
+                <p className="text-xs text-slate-400">Memuat sebaran data keluarga...</p>
+              </div>
+            ) : dusunList.length === 0 ? (
+              <p className="py-8 text-center text-xs text-slate-500">
+                Tidak ada data wilayah pada filter saat ini.
+              </p>
+            ) : (
+              dusunList.map((dusun) => <DusunRow key={dusun.id} dusun={dusun} />)
+            )}
           </div>
 
           <div className="mt-5 flex flex-col gap-2 text-xs sm:flex-row sm:items-center sm:justify-between">
