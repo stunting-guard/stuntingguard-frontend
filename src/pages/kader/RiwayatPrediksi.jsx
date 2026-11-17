@@ -170,8 +170,8 @@ export default function RiwayatPrediksi() {
           <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input
             type="search"
-            aria-label="Cari kepala keluarga atau balita"
-            placeholder="Cari nama kepala keluarga atau balita..."
+            aria-label="Cari No. KK, kepala keluarga, nama ibu, atau balita"
+            placeholder="Cari No. KK, kepala keluarga, nama ibu, atau balita..."
             value={search}
             onChange={(e) => update(setSearch)(e.target.value)}
             className="w-full rounded-xl bg-slate-100 py-2.5 pl-10 pr-4 text-xs text-[#0F2942] placeholder:text-slate-400 outline-none transition focus:ring-2 focus:ring-[#1B8A5A]/30"
