@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   AlertTriangle,
   CalendarDays,
@@ -6,51 +6,39 @@ import {
   Download,
   Filter,
   Lightbulb,
+  Loader2,
   PieChart,
   ShieldCheck,
   Users,
 } from "lucide-react";
 import RiskBadge from "../../components/common/RiskBadge";
 import Pagination from "../../components/common/Pagination";
+import { api } from "../../services/api";
 
-/* ------------------------- MOCK DATA ------------------------- */
-// TODO: ganti dengan response API (mis. GET /api/dashboard?kec=&desa=&periode=)
-const FILTER_OPTIONS = {
-  kecamatan: ["Kec. Cibadak", "Kec. Cikalong"],
-  desa: ["Desa Sukamaju", "Desa Sukamulya"],
-  periode: ["Maret 2025", "Februari 2025", "Januari 2025"],
+/* ------------------------- FALLBACK DATA ------------------------- */
+const DEFAULT_FILTER_OPTIONS = {
+  kecamatan: ["Semua Kecamatan", "Kec. Cibadak", "Kec. Cikalong"],
+  desa: ["Semua Desa", "Desa Sukamaju", "Desa Sukamulya"],
+  periode: ["Semua Periode", "Maret 2025", "Februari 2025", "Januari 2025"],
 };
 
-const SUMMARY = {
-  totalKK: 1420,
-  tinggi: 218,
-  persenTinggi: 15.3,
+const DEFAULT_SUMMARY = {
+  totalKK: 0,
+  tinggi: 0,
+  persenTinggi: 0,
 };
 
-const PRIORITAS_TOTAL = 218;
-const PAGE_SIZE = 5;
-const PRIORITAS = [
-  { id: "KK-SKM-0142", kepala: "Bpk. Slamet Riyadi", balita: "Aditya Pratama", usia: "18 Bulan", rw: "RW 03", status: "Tinggi", faktor: ["Sanitasi Buruk", "Air Tak Terlindung"] },
-  { id: "KK-SKM-0288", kepala: "Bpk. Kosasih", balita: "Siti Rahmawati", usia: "24 Bulan", rw: "RW 03", status: "Tinggi", faktor: ["Kemiskinan", "Sanitasi Buruk"] },
-  { id: "KK-SKM-0419", kepala: "Bpk. Dadang Rohimat", balita: "Rian Hidayat", usia: "12 Bulan", rw: "RW 05", status: "Tinggi", faktor: ["Air Tak Terlindung"] },
-  { id: "KK-SKM-0512", kepala: "Bpk. Agus Setiawan", balita: "Nayla Putri", usia: "32 Bulan", rw: "RW 02", status: "Sedang", faktor: ["Pendidikan Rendah"] },
-  { id: "KK-SKM-0681", kepala: "Bpk. Wawan Kurnia", balita: "Fikri Alamsyah", usia: "9 Bulan", rw: "RW 05", status: "Tinggi", faktor: ["Sanitasi Buruk"] },
-];
-
-const FAKTOR = [
+const DEFAULT_FAKTOR = [
   { label: "Sanitasi Buruk / Tidak Layak", value: 38.5, bar: "bg-teal-700" },
   { label: "Air Minum Tidak Terlindungi", value: 27.2, bar: "bg-teal-600" },
   { label: "Pendapatan Rendah (< UMR)", value: 19.8, bar: "bg-emerald-500" },
   { label: "Pendidikan Pengasuh Rendah", value: 14.5, bar: "bg-emerald-400" },
 ];
 
-// segmen = proporsi (%) Tinggi / Sedang / Rendah di tiap RW (total 100)
-const SEBARAN_RW = [
-  { rw: "RW 01", kk: 320, persenTinggi: 6.8, kategori: "Rendah", segmen: { tinggi: 6.8, sedang: 22, rendah: 71.2 } },
-  { rw: "RW 02", kk: 260, persenTinggi: 14.2, kategori: "Sedang", segmen: { tinggi: 14.2, sedang: 28, rendah: 57.8 } },
-  { rw: "RW 03", kk: 310, persenTinggi: 24.5, kategori: "Tinggi", segmen: { tinggi: 24.5, sedang: 31, rendah: 44.5 } },
-  { rw: "RW 04", kk: 230, persenTinggi: 9.1, kategori: "Rendah", segmen: { tinggi: 9.1, sedang: 26, rendah: 64.9 } },
-  { rw: "RW 05", kk: 300, persenTinggi: 20.7, kategori: "Tinggi", segmen: { tinggi: 20.7, sedang: 30, rendah: 49.3 } },
+const DEFAULT_SEBARAN_RW = [
+  { rw: "RW 01", kk: 0, persenTinggi: 0, kategori: "Rendah", segmen: { tinggi: 0, sedang: 0, rendah: 100 } },
+  { rw: "RW 02", kk: 0, persenTinggi: 0, kategori: "Rendah", segmen: { tinggi: 0, sedang: 0, rendah: 100 } },
+  { rw: "RW 03", kk: 0, persenTinggi: 0, kategori: "Rendah", segmen: { tinggi: 0, sedang: 0, rendah: 100 } },
 ];
 
 const KATEGORI_CHIP = {
@@ -58,6 +46,8 @@ const KATEGORI_CHIP = {
   Sedang: "bg-amber-50 text-amber-700",
   Tinggi: "bg-red-50 text-red-700",
 };
+
+const PAGE_SIZE = 5;
 
 /* ------------------------- Sub-komponen ------------------------- */
 function FilterSelect({ value, onChange, options, label, icon: Icon }) {
@@ -75,7 +65,9 @@ function FilterSelect({ value, onChange, options, label, icon: Icon }) {
         }`}
       >
         {options.map((o) => (
-          <option key={o}>{o}</option>
+          <option key={o} value={o}>
+            {o}
+          </option>
         ))}
       </select>
       <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
@@ -102,6 +94,7 @@ function StatCard({ label, value, unit, desc, icon: Icon, iconWrap, accent = "" 
 }
 
 function FaktorChips({ items }) {
+  if (!items || items.length === 0) return null;
   return (
     <div className="flex flex-wrap gap-1.5">
       {items.map((f) => (
@@ -115,28 +108,147 @@ function FaktorChips({ items }) {
 
 /* ------------------------- Halaman ------------------------- */
 export default function DashboardAnalitik() {
+  const [filterOptions, setFilterOptions] = useState(DEFAULT_FILTER_OPTIONS);
   const [filters, setFilters] = useState({
-    kecamatan: FILTER_OPTIONS.kecamatan[0],
-    desa: FILTER_OPTIONS.desa[0],
-    periode: FILTER_OPTIONS.periode[0],
+    kecamatan: "Semua Kecamatan",
+    desa: "Semua Desa",
+    periode: "Semua Periode",
   });
   const [page, setPage] = useState(1);
+
+  const [summary, setSummary] = useState(DEFAULT_SUMMARY);
+  const [prioritasItems, setPrioritasItems] = useState([]);
+  const [prioritasMeta, setPrioritasMeta] = useState({
+    total: 0,
+    totalPages: 1,
+  });
+  const [faktorList, setFaktorList] = useState(DEFAULT_FAKTOR);
+  const [sebaranRw, setSebaranRw] = useState(DEFAULT_SEBARAN_RW);
+
+  const [isLoading, setIsLoading] = useState(true);
+  const [isExporting, setIsExporting] = useState(false);
+
+  // Ambil opsi wilayah master
+  useEffect(() => {
+    let isMounted = true;
+    async function loadWilayah() {
+      try {
+        const res = await api.get("/master/wilayah");
+        if (isMounted && res?.success && res?.data) {
+          const kec = ["Semua Kecamatan", ...(res.data.kecamatan || [])];
+          const des = ["Semua Desa", ...(res.data.desa || [])];
+          const per = ["Semua Periode", ...(res.data.periode || [])];
+          setFilterOptions({
+            kecamatan: [...new Set(kec)],
+            desa: [...new Set(des)],
+            periode: [...new Set(per)],
+          });
+        }
+      } catch {
+        // Fallback default
+      }
+    }
+    loadWilayah();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Ambil data dashboard dari endpoint GET /api/kader/dashboard
+  useEffect(() => {
+    let isMounted = true;
+
+    async function fetchDashboard() {
+      setIsLoading(true);
+      try {
+        const params = {
+          kecamatan:
+            filters.kecamatan !== "Semua Kecamatan" ? filters.kecamatan : undefined,
+          desa: filters.desa !== "Semua Desa" ? filters.desa : undefined,
+          periode: filters.periode !== "Semua Periode" ? filters.periode : undefined,
+          page,
+          limit: PAGE_SIZE,
+        };
+
+        const res = await api.get("/kader/dashboard", params);
+
+        if (!isMounted) return;
+
+        if (res?.success && res?.data) {
+          const data = res.data;
+          if (data.summary) {
+            setSummary(data.summary);
+          }
+          if (data.prioritas) {
+            setPrioritasItems(data.prioritas.items || []);
+            setPrioritasMeta({
+              total: data.prioritas.meta?.total || 0,
+              totalPages: data.prioritas.meta?.totalPages || 1,
+            });
+          }
+          if (Array.isArray(data.faktorDominan) && data.faktorDominan.length > 0) {
+            const colors = [
+              "bg-teal-700",
+              "bg-teal-600",
+              "bg-emerald-500",
+              "bg-emerald-400",
+              "bg-slate-500",
+            ];
+            setFaktorList(
+              data.faktorDominan.map((f, idx) => ({
+                label: f.label,
+                value: Number(f.value) || 0,
+                bar: colors[idx % colors.length],
+              }))
+            );
+          }
+          if (Array.isArray(data.sebaranRw) && data.sebaranRw.length > 0) {
+            setSebaranRw(data.sebaranRw);
+          }
+        }
+      } catch {
+        // Gunakan state sebelumnya
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    }
+
+    fetchDashboard();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [filters, page]);
 
   const setFilter = (key) => (value) => {
     setFilters((prev) => ({ ...prev, [key]: value }));
     setPage(1);
   };
 
-  const totalPages = Math.ceil(PRIORITAS_TOTAL / PAGE_SIZE);
-  const from = (page - 1) * PAGE_SIZE + 1;
-  const to = Math.min(page * PAGE_SIZE, PRIORITAS_TOTAL);
+  const totalPages = Math.max(1, prioritasMeta.totalPages || 1);
+  const totalCount = prioritasMeta.total || 0;
+  const from = totalCount === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const to = Math.min(page * PAGE_SIZE, totalCount);
 
-  const prioritasRW = SEBARAN_RW.reduce((a, b) => (b.persenTinggi > a.persenTinggi ? b : a)).rw;
-  const fmt = (n) => n.toLocaleString("id-ID");
+  const prioritasRW =
+    sebaranRw.length > 0
+      ? sebaranRw.reduce((a, b) => (b.persenTinggi > a.persenTinggi ? b : a), sebaranRw[0]).rw
+      : "RW 01";
 
-  const handleDownload = () => {
-    // TODO: panggil endpoint unduh laporan (PDF/Excel)
-    alert("Unduh laporan (mock)");
+  const fmt = (n) => (typeof n === "number" ? n.toLocaleString("id-ID") : n || 0);
+
+  const handleDownload = async () => {
+    setIsExporting(true);
+    try {
+      await api.downloadBlob(
+        "/laporan/export?module=kader-dashboard&format=xlsx",
+        `Laporan-Dashboard-Kader-${new Date().toISOString().slice(0, 10)}.xlsx`
+      );
+    } catch {
+      alert("Gagal mengunduh laporan. Pastikan sesi login masih aktif.");
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   return (
@@ -159,17 +271,38 @@ export default function DashboardAnalitik() {
           Filter Wilayah:
         </p>
         <div className="grid flex-1 gap-2 sm:grid-cols-3">
-          <FilterSelect label="Kecamatan" value={filters.kecamatan} onChange={setFilter("kecamatan")} options={FILTER_OPTIONS.kecamatan} />
-          <FilterSelect label="Desa" value={filters.desa} onChange={setFilter("desa")} options={FILTER_OPTIONS.desa} />
-          <FilterSelect label="Periode" icon={CalendarDays} value={filters.periode} onChange={setFilter("periode")} options={FILTER_OPTIONS.periode} />
+          <FilterSelect
+            label="Kecamatan"
+            value={filters.kecamatan}
+            onChange={setFilter("kecamatan")}
+            options={filterOptions.kecamatan}
+          />
+          <FilterSelect
+            label="Desa"
+            value={filters.desa}
+            onChange={setFilter("desa")}
+            options={filterOptions.desa}
+          />
+          <FilterSelect
+            label="Periode"
+            icon={CalendarDays}
+            value={filters.periode}
+            onChange={setFilter("periode")}
+            options={filterOptions.periode}
+          />
         </div>
         <button
           type="button"
           onClick={handleDownload}
-          className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#0F2942] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[#0F2942]/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1B8A5A]"
+          disabled={isExporting}
+          className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#0F2942] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[#0F2942]/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1B8A5A] disabled:opacity-75"
         >
-          <Download className="h-4 w-4" aria-hidden="true" />
-          Unduh Laporan
+          {isExporting ? (
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+          ) : (
+            <Download className="h-4 w-4" aria-hidden="true" />
+          )}
+          {isExporting ? "Mengunduh..." : "Unduh Laporan"}
         </button>
       </section>
 
@@ -177,7 +310,7 @@ export default function DashboardAnalitik() {
       <section aria-label="Ringkasan" className="grid gap-4 md:grid-cols-3">
         <StatCard
           label="TOTAL KELUARGA TERDATA"
-          value={fmt(SUMMARY.totalKK)}
+          value={fmt(summary.totalKK)}
           unit="KK"
           desc="Terdaftar pada sistem sensus desa"
           icon={Users}
@@ -185,7 +318,7 @@ export default function DashboardAnalitik() {
         />
         <StatCard
           label="RISIKO TINGGI"
-          value={fmt(SUMMARY.tinggi)}
+          value={fmt(summary.tinggi)}
           unit="Keluarga"
           desc="Prioritas intervensi penanganan segera"
           icon={AlertTriangle}
@@ -194,7 +327,7 @@ export default function DashboardAnalitik() {
         />
         <StatCard
           label="% RISIKO TINGGI"
-          value={`${SUMMARY.persenTinggi}%`}
+          value={`${summary.persenTinggi ?? 0}%`}
           desc="Dari total populasi balita terdata"
           icon={PieChart}
           iconWrap="bg-sky-50 text-sky-500"
@@ -217,64 +350,77 @@ export default function DashboardAnalitik() {
             </p>
           </div>
 
-          {/* Desktop: tabel */}
-          <div className="hidden overflow-x-auto md:block">
-            <table className="w-full min-w-[640px] text-left text-xs">
-              <thead className="bg-slate-50 text-[10px] font-bold tracking-wide text-slate-500">
-                <tr>
-                  <th className="px-5 py-3">NO / ID KELUARGA</th>
-                  <th className="px-3 py-3">KEPALA KELUARGA</th>
-                  <th className="px-3 py-3">BALITA &amp; USIA</th>
-                  <th className="px-3 py-3">WILAYAH</th>
-                  <th className="px-3 py-3">STATUS RISIKO</th>
-                  <th className="px-3 py-3">FAKTOR PEMICU UTAMA</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {PRIORITAS.map((r) => (
-                  <tr key={r.id} className="transition hover:bg-slate-50/70">
-                    <td className="whitespace-nowrap px-5 py-3.5 font-mono text-[11px] text-slate-500">{r.id}</td>
-                    <td className="px-3 py-3.5 font-semibold text-[#0F2942]">{r.kepala}</td>
-                    <td className="px-3 py-3.5">
-                      <p className="font-medium text-[#0F2942]">{r.balita}</p>
-                      <p className="text-[11px] text-slate-400">{r.usia}</p>
-                    </td>
-                    <td className="whitespace-nowrap px-3 py-3.5 text-slate-600">{r.rw}</td>
-                    <td className="px-3 py-3.5">
-                      <RiskBadge level={r.status} />
-                    </td>
-                    <td className="px-3 py-3.5">
-                      <FaktorChips items={r.faktor} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          {isLoading ? (
+            <div className="flex min-h-[220px] flex-col items-center justify-center gap-2 px-5 py-12">
+              <Loader2 className="h-6 w-6 animate-spin text-[#1B8A5A]" />
+              <p className="text-xs text-slate-400">Memuat data prioritas intervensi...</p>
+            </div>
+          ) : prioritasItems.length === 0 ? (
+            <div className="px-5 py-12 text-center text-xs text-slate-500">
+              Belum ada data keluarga pada filter yang dipilih.
+            </div>
+          ) : (
+            <>
+              {/* Desktop: tabel */}
+              <div className="hidden overflow-x-auto md:block">
+                <table className="w-full min-w-[640px] text-left text-xs">
+                  <thead className="bg-slate-50 text-[10px] font-bold tracking-wide text-slate-500">
+                    <tr>
+                      <th className="px-5 py-3">NO / ID KELUARGA</th>
+                      <th className="px-3 py-3">KEPALA KELUARGA</th>
+                      <th className="px-3 py-3">BALITA &amp; USIA</th>
+                      <th className="px-3 py-3">WILAYAH</th>
+                      <th className="px-3 py-3">STATUS RISIKO</th>
+                      <th className="px-3 py-3">FAKTOR PEMICU UTAMA</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {prioritasItems.map((r) => (
+                      <tr key={r.id} className="transition hover:bg-slate-50/70">
+                        <td className="whitespace-nowrap px-5 py-3.5 font-mono text-[11px] text-slate-500">{r.id}</td>
+                        <td className="px-3 py-3.5 font-semibold text-[#0F2942]">{r.kepala}</td>
+                        <td className="px-3 py-3.5">
+                          <p className="font-medium text-[#0F2942]">{r.balita}</p>
+                          <p className="text-[11px] text-slate-400">{r.usia}</p>
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-3.5 text-slate-600">{r.rw}</td>
+                        <td className="px-3 py-3.5">
+                          <RiskBadge level={r.status} />
+                        </td>
+                        <td className="px-3 py-3.5">
+                          <FaktorChips items={r.faktor} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
 
-          {/* Mobile: kartu */}
-          <ul className="divide-y divide-slate-100 border-t border-slate-100 md:hidden">
-            {PRIORITAS.map((r) => (
-              <li key={r.id} className="space-y-2 px-5 py-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-semibold text-[#0F2942]">{r.kepala}</p>
-                    <p className="font-mono text-[11px] text-slate-400">{r.id}</p>
-                  </div>
-                  <RiskBadge level={r.status} />
-                </div>
-                <p className="text-xs text-slate-600">
-                  {r.balita} · {r.usia} · {r.rw}
-                </p>
-                <FaktorChips items={r.faktor} />
-              </li>
-            ))}
-          </ul>
+              {/* Mobile: kartu */}
+              <ul className="divide-y divide-slate-100 border-t border-slate-100 md:hidden">
+                {prioritasItems.map((r) => (
+                  <li key={r.id} className="space-y-2 px-5 py-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-[#0F2942]">{r.kepala}</p>
+                        <p className="font-mono text-[11px] text-slate-400">{r.id}</p>
+                      </div>
+                      <RiskBadge level={r.status} />
+                    </div>
+                    <p className="text-xs text-slate-600">
+                      {r.balita} · {r.usia} · {r.rw}
+                    </p>
+                    <FaktorChips items={r.faktor} />
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
 
           <div className="flex flex-col items-center gap-3 border-t border-slate-100 px-5 py-4 sm:flex-row sm:justify-between">
             <p className="text-xs text-slate-500">
               Menampilkan <b className="text-[#0F2942]">{from} - {to}</b> dari{" "}
-              <b className="text-[#0F2942]">{PRIORITAS_TOTAL}</b> keluarga prioritas
+              <b className="text-[#0F2942]">{totalCount}</b> keluarga prioritas
             </p>
             <Pagination page={page} totalPages={totalPages} onChange={setPage} />
           </div>
@@ -294,7 +440,7 @@ export default function DashboardAnalitik() {
           </div>
 
           <ul className="mt-5 space-y-4">
-            {FAKTOR.map((f, i) => (
+            {faktorList.map((f, i) => (
               <li key={f.label}>
                 <div className="mb-1.5 flex items-center justify-between gap-3 text-xs">
                   <span className="font-semibold text-[#0F2942]">
@@ -309,7 +455,7 @@ export default function DashboardAnalitik() {
                   aria-valuemin={0}
                   aria-valuemax={100}
                 >
-                  <div className={`h-full rounded-full ${f.bar}`} style={{ width: `${f.value}%` }} />
+                  <div className={`h-full rounded-full ${f.bar}`} style={{ width: `${Math.min(100, f.value)}%` }} />
                 </div>
               </li>
             ))}
@@ -319,8 +465,7 @@ export default function DashboardAnalitik() {
             <Lightbulb className="mt-0.5 h-4 w-4 shrink-0 text-[#1B8A5A]" aria-hidden="true" />
             <p>
               <b className="text-[#0F2942]">Temuan Utama:</b> Sanitasi dan akses air bersih
-              berkontribusi <b className="text-[#0F2942]">&gt;65%</b> terhadap total akumulasi
-              risiko stunting balita di {filters.desa}.
+              berkontribusi signifikan terhadap total akumulasi risiko stunting balita di wilayah survei.
             </p>
           </div>
         </section>
@@ -348,8 +493,8 @@ export default function DashboardAnalitik() {
         </div>
 
         <ul className="mt-5 space-y-3 border-t border-slate-100 pt-5">
-          {SEBARAN_RW.map((r) => {
-            const isPriority = r.rw === prioritasRW;
+          {sebaranRw.map((r) => {
+            const isPriority = r.rw === prioritasRW && r.persenTinggi > 0;
             return (
               <li
                 key={r.rw}
@@ -364,18 +509,18 @@ export default function DashboardAnalitik() {
                       </span>
                     )}
                   </span>
-                  <span className={`rounded-md px-2 py-0.5 text-[11px] font-semibold ${KATEGORI_CHIP[r.kategori]}`}>
+                  <span className={`rounded-md px-2 py-0.5 text-[11px] font-semibold ${KATEGORI_CHIP[r.kategori] || KATEGORI_CHIP.Rendah}`}>
                     {r.persenTinggi}% ({r.kategori})
                   </span>
                 </div>
                 <div
                   className="flex h-3 overflow-hidden rounded-full bg-slate-100"
                   role="img"
-                  aria-label={`${r.rw}: Tinggi ${r.segmen.tinggi}%, Sedang ${r.segmen.sedang}%, Rendah ${r.segmen.rendah}%`}
+                  aria-label={`${r.rw}: Tinggi ${r.segmen?.tinggi || 0}%, Sedang ${r.segmen?.sedang || 0}%, Rendah ${r.segmen?.rendah || 0}%`}
                 >
-                  <div className="bg-red-500" style={{ width: `${r.segmen.tinggi}%` }} />
-                  <div className="bg-amber-400" style={{ width: `${r.segmen.sedang}%` }} />
-                  <div className="bg-emerald-500" style={{ width: `${r.segmen.rendah}%` }} />
+                  <div className="bg-red-500" style={{ width: `${r.segmen?.tinggi || 0}%` }} />
+                  <div className="bg-amber-400" style={{ width: `${r.segmen?.sedang || 0}%` }} />
+                  <div className="bg-emerald-500" style={{ width: `${r.segmen?.rendah || 0}%` }} />
                 </div>
               </li>
             );

@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
+  AlertCircle,
   Baby,
   Bath,
   ChevronDown,
@@ -12,10 +13,10 @@ import {
   RotateCcw,
   Sparkles,
 } from "lucide-react";
+import { api } from "../../services/api";
 
-/* ------------------------- MOCK DATA ------------------------- */
-// TODO: ganti dengan data dari API (master data opsi dropdown)
-const OPTIONS = {
+/* ------------------------- FALLBACK DATA ------------------------- */
+const DEFAULT_OPTIONS = {
   pendidikan: [
     "Tidak Sekolah",
     "SD (Sekolah Dasar / Sederajat)",
@@ -83,11 +84,65 @@ export default function InputDataKeluarga() {
   const navigate = useNavigate();
   const [form, setForm] = useState(INITIAL_FORM);
   const [errors, setErrors] = useState({});
+  const [submitError, setSubmitError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [options, setOptions] = useState(DEFAULT_OPTIONS);
+  const [wilayahHints, setWilayahHints] = useState([]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadMasterData() {
+      try {
+        const [optRes, wilRes] = await Promise.all([
+          api.get("/master/form-options").catch(() => null),
+          api.get("/master/wilayah").catch(() => null),
+        ]);
+
+        if (!isMounted) return;
+
+        if (optRes?.success && optRes?.data) {
+          setOptions((prev) => ({
+            pendidikan: optRes.data.pendidikan || prev.pendidikan,
+            kek: optRes.data.kek || prev.kek,
+            air: optRes.data.air || prev.air,
+            sanitasi: optRes.data.sanitasi || prev.sanitasi,
+          }));
+        }
+
+        if (wilRes?.success && wilRes?.data) {
+          const suggestions = [];
+          if (Array.isArray(wilRes.data.dusun)) {
+            wilRes.data.dusun.forEach((d) => {
+              if (d.rw && d.nama) {
+                suggestions.push(`${d.nama}, ${d.rw}`);
+              } else if (d.rw) {
+                suggestions.push(`Desa Sukamaju, ${d.rw}`);
+              }
+            });
+          }
+          if (suggestions.length === 0 && Array.isArray(wilRes.data.rw)) {
+            wilRes.data.rw.forEach((rw) => suggestions.push(`Desa Sukamaju, ${rw}`));
+          }
+          if (suggestions.length > 0) {
+            setWilayahHints([...new Set(suggestions)]);
+          }
+        }
+      } catch {
+        // Fallback tetap menggunakan data lokal
+      }
+    }
+
+    loadMasterData();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const setField = (name, value) => {
     setForm((prev) => ({ ...prev, [name]: value }));
     setErrors((prev) => ({ ...prev, [name]: undefined }));
+    if (submitError) setSubmitError("");
   };
 
   const handleChange = (e) => setField(e.target.name, e.target.value);
@@ -108,26 +163,56 @@ export default function InputDataKeluarga() {
     return next;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     const found = validate();
     setErrors(found);
     if (Object.keys(found).length > 0) return;
 
     setIsSubmitting(true);
-    // TODO: POST /api/prediksi → kirim `form`, terima hasil klasifikasi
-    setTimeout(() => {
+    setSubmitError("");
+
+    try {
+      const payload = {
+        wilayah: form.wilayah.trim(),
+        usia: Number(form.usia),
+        pendapatan: Number(form.pendapatan),
+        pendidikan: form.pendidikan,
+        kek: form.kek,
+        air: form.air,
+        sanitasi: form.sanitasi,
+      };
+
+      const res = await api.post("/prediksi", payload);
+
+      if (res && res.success && res.data) {
+        navigate(`/kader/hasil-klasifikasi/${res.data.id}`, {
+          state: { hasil: res.data },
+        });
+      } else {
+        setSubmitError(res?.message || "Gagal memproses prediksi risiko stunting.");
+      }
+    } catch (err) {
+      if (err?.data?.errors) {
+        setErrors(err.data.errors);
+      }
+      setSubmitError(
+        err?.data?.message ||
+          err?.message ||
+          "Terjadi kendala jaringan saat menghubungi server prediksi."
+      );
+    } finally {
       setIsSubmitting(false);
-      navigate("/kader/hasil", { state: { input: form } });
-    }, 900);
+    }
   };
 
   const handleReset = () => {
     setForm(INITIAL_FORM);
     setErrors({});
+    setSubmitError("");
   };
 
-  const renderSelect = ({ id, icon: Icon, options, placeholder }) => (
+  const renderSelect = ({ id, icon: Icon, optionsList, placeholder }) => (
     <div className="relative">
       <Icon className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
       <select
@@ -142,7 +227,7 @@ export default function InputDataKeluarga() {
         <option value="" disabled>
           {placeholder}
         </option>
-        {options.map((o) => (
+        {optionsList.map((o) => (
           <option key={o} value={o} className="text-[#0F2942]">
             {o}
           </option>
@@ -165,6 +250,16 @@ export default function InputDataKeluarga() {
         Masukkan data sosio-ekonomi untuk klasifikasi risiko stunting dengan Random Forest.
       </p>
 
+      {submitError && (
+        <div
+          role="alert"
+          className="mt-4 flex items-center gap-2.5 rounded-xl border border-red-200 bg-red-50 p-4 text-xs font-medium text-red-700"
+        >
+          <AlertCircle className="h-4 w-4 shrink-0 text-red-600" aria-hidden="true" />
+          <span>{submitError}</span>
+        </div>
+      )}
+
       <form
         onSubmit={handleSubmit}
         noValidate
@@ -183,11 +278,19 @@ export default function InputDataKeluarga() {
                 id="wilayah"
                 name="wilayah"
                 type="text"
+                list="wilayah-suggestions"
                 placeholder="Desa Sukamaju, RW 03"
                 value={form.wilayah}
                 onChange={handleChange}
                 className={inputClass(!!errors.wilayah)}
               />
+              {wilayahHints.length > 0 && (
+                <datalist id="wilayah-suggestions">
+                  {wilayahHints.map((w) => (
+                    <option key={w} value={w} />
+                  ))}
+                </datalist>
+              )}
             </div>
           </Field>
 
@@ -249,7 +352,12 @@ export default function InputDataKeluarga() {
             hint="Faktor literasi kesehatan & nutrisi sampai tanggal."
             error={errors.pendidikan}
           >
-            {renderSelect({ id: "pendidikan", icon: GraduationCap, options: OPTIONS.pendidikan, placeholder: "Pilih pendidikan terakhir" })}
+            {renderSelect({
+              id: "pendidikan",
+              icon: GraduationCap,
+              optionsList: options.pendidikan,
+              placeholder: "Pilih pendidikan terakhir",
+            })}
           </Field>
 
           <Field
@@ -258,7 +366,12 @@ export default function InputDataKeluarga() {
             hint="Catatan gizi pada masa gestasi (Ibu KIA)."
             error={errors.kek}
           >
-            {renderSelect({ id: "kek", icon: HeartPulse, options: OPTIONS.kek, placeholder: "Pilih riwayat kehamilan" })}
+            {renderSelect({
+              id: "kek",
+              icon: HeartPulse,
+              optionsList: options.kek,
+              placeholder: "Pilih riwayat kehamilan",
+            })}
           </Field>
 
           <Field
@@ -267,7 +380,12 @@ export default function InputDataKeluarga() {
             hint="Aksesibilitas air minum dan kebutuhan sanitasi."
             error={errors.air}
           >
-            {renderSelect({ id: "air", icon: Droplets, options: OPTIONS.air, placeholder: "Pilih sumber air" })}
+            {renderSelect({
+              id: "air",
+              icon: Droplets,
+              optionsList: options.air,
+              placeholder: "Pilih sumber air",
+            })}
           </Field>
 
           <Field
@@ -277,7 +395,12 @@ export default function InputDataKeluarga() {
             error={errors.sanitasi}
             className="md:col-span-2"
           >
-            {renderSelect({ id: "sanitasi", icon: Bath, options: OPTIONS.sanitasi, placeholder: "Pilih kondisi sanitasi" })}
+            {renderSelect({
+              id: "sanitasi",
+              icon: Bath,
+              optionsList: options.sanitasi,
+              placeholder: "Pilih kondisi sanitasi",
+            })}
           </Field>
         </div>
 

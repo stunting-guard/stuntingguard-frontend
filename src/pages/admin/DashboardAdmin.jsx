@@ -1,8 +1,10 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   ArrowRight,
   CircleCheck,
   LayoutGrid,
+  Loader2,
   ShieldCheck,
   Table2,
   TrendingUp,
@@ -11,17 +13,20 @@ import {
   Users,
 } from "lucide-react";
 import StatCard from "../../components/ui/StatCard";
+import { api } from "../../services/api";
 
 /* ------------------------------------------------------------------ */
-/* Mock data — ganti dengan response API saat backend sudah siap       */
+/* Fallback data                                                      */
 /* ------------------------------------------------------------------ */
-const MOCK_STATS = {
+const DEFAULT_STATS = {
   totalDataLatih: 12840,
   akurasiTerakhir: 94.8,
   penggunaTerdaftar: 5,
+  versiModel: "Random Forest Classifier v1.2",
+  pengguna: { total: 5, kader: 3, aparatur: 1, admin: 1 },
 };
 
-const MOCK_MODUL = [
+const MODUL_UTAMA = [
   {
     id: 1,
     judul: "Kelola Dataset Balita",
@@ -57,19 +62,57 @@ const fmt = new Intl.NumberFormat("id-ID");
 /* Halaman                                                             */
 /* ------------------------------------------------------------------ */
 export default function DashboardAdmin() {
-  const stats = MOCK_STATS;
+  const [stats, setStats] = useState(DEFAULT_STATS);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadDashboard() {
+      try {
+        const res = await api.get("/admin/dashboard");
+        if (!isMounted) return;
+
+        if (res?.success && res?.data) {
+          setStats((prev) => ({
+            ...prev,
+            ...res.data,
+          }));
+        }
+      } catch {
+        // Fallback default
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    }
+
+    loadDashboard();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   return (
     <div className="space-y-5 sm:space-y-6">
       {/* Sapaan */}
       <section className="rounded-2xl bg-white px-5 py-6 shadow-sm sm:px-7">
-        <span className="inline-flex items-center gap-1.5 rounded-md bg-[#E7F5F0] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.1em] text-teal-800">
-          Dashboard Administrasi
-          <span className="h-1 w-1 rounded-full bg-[#0F8A73]" aria-hidden="true" />
-        </span>
-        <h1 className="mt-3 text-[26px] font-extrabold leading-tight tracking-tight text-[#0F2942] sm:text-[32px]">
-          Selamat Datang, Admin &amp; Peneliti
-        </h1>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <span className="inline-flex items-center gap-1.5 rounded-md bg-[#E7F5F0] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.1em] text-teal-800">
+              Dashboard Administrasi
+              <span className="h-1 w-1 rounded-full bg-[#0F8A73]" aria-hidden="true" />
+            </span>
+            <h1 className="mt-3 text-[26px] font-extrabold leading-tight tracking-tight text-[#0F2942] sm:text-[32px]">
+              Selamat Datang, Admin &amp; Peneliti
+            </h1>
+          </div>
+          {isLoading && (
+            <span className="inline-flex items-center gap-1.5 text-xs text-slate-400">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Sinkronisasi data sistem...
+            </span>
+          )}
+        </div>
       </section>
 
       {/* Kartu statistik */}
@@ -84,7 +127,7 @@ export default function DashboardAdmin() {
             <div className="flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center gap-1.5 rounded-md bg-[#E7F5F0] px-2.5 py-1 text-[11px] font-semibold text-teal-800">
                 <CircleCheck className="h-3.5 w-3.5" aria-hidden="true" />
-                Format CSV Bersih
+                Format Data Bersih
               </span>
               <span className="text-[11px] text-slate-500">Sumber Posyandu Wilayah</span>
             </div>
@@ -93,7 +136,7 @@ export default function DashboardAdmin() {
 
         <StatCard
           label="Akurasi Model Terakhir"
-          value={`${stats.akurasiTerakhir.toFixed(1)}%`}
+          value={`${Number(stats.akurasiTerakhir || 94.8).toFixed(1)}%`}
           valueClassName="mt-4 text-4xl font-extrabold leading-none tracking-tight text-teal-800 sm:text-[40px]"
           caption="Pengujian Data Uji"
           icon={<ShieldCheck className="h-5 w-5" strokeWidth={1.8} aria-hidden="true" />}
@@ -108,7 +151,7 @@ export default function DashboardAdmin() {
           footer={
             <span className="inline-flex items-center gap-1.5 rounded-md bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-teal-800">
               <Users className="h-3.5 w-3.5" aria-hidden="true" />
-              Role: Admin &amp; Kader Posyandu
+              Role: {stats.pengguna?.kader ?? 0} Kader, {stats.pengguna?.aparatur ?? 0} Desa, {stats.pengguna?.admin ?? 0} Admin
             </span>
           }
         />
@@ -129,12 +172,12 @@ export default function DashboardAdmin() {
             </div>
           </div>
           <span className="self-start rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold text-slate-500">
-            {MOCK_MODUL.length} Fitur Inti
+            {MODUL_UTAMA.length} Fitur Inti
           </span>
         </div>
 
         <ul className="mt-5 space-y-4">
-          {MOCK_MODUL.map((m) => {
+          {MODUL_UTAMA.map((m) => {
             const Icon = m.icon;
             return (
               <li

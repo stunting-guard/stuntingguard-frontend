@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { LayoutGrid, LineChart, Table2, UsersRound } from "lucide-react";
 import DashboardLayout from "./DashboardLayout";
+import { getUser } from "../services/api";
 
 const NAV_ITEMS = [
   { to: "/admin/dashboard", label: "Dashboard Admin", short: "Dashboard", icon: LayoutGrid },
@@ -10,8 +11,11 @@ const NAV_ITEMS = [
 ];
 
 export default function AdminLayout() {
-  // MOCK — ganti dengan data user dari auth context / API
-  const [user] = useState({ name: "Mamil Ganteng", role: "Pengelola Data" });
+  const sessionUser = getUser();
+  const [user] = useState({
+    name: sessionUser?.name || "Admin StuntingGuard",
+    role: sessionUser?.role === "ADMIN" ? "Pengelola Data" : sessionUser?.role || "Pengelola Data",
+  });
 
   return (
     <DashboardLayout

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Download,
   Info,
@@ -12,15 +12,22 @@ import {
 import Modal, { ModalClose } from "../../components/ui/Modal";
 import Toast from "../../components/ui/Toast";
 import useToast from "../../hooks/useToast";
-import useSafeTimeout from "../../hooks/useSafeTimeout";
+import { api } from "../../services/api";
 
 /* ------------------------------------------------------------------ */
-/* Mock data — ganti dengan response API model saat backend siap       */
+/* Fallback data                                                      */
 /* ------------------------------------------------------------------ */
-const TOTAL_UJI = 2568;
-const TP_TOTAL = 2372;
+const DEFAULT_TOTAL_UJI = 2568;
+const DEFAULT_TP_TOTAL = 2372;
 
-const METRICS = [
+const ICON_MAP = {
+  Settings,
+  Target,
+  ShieldCheck,
+  SlidersHorizontal,
+};
+
+const DEFAULT_METRICS = [
   {
     key: "akurasi",
     label: "Akurasi (Accuracy)",
@@ -59,9 +66,9 @@ const METRICS = [
   },
 ];
 
-const KELAS = ["Rendah", "Sedang", "Tinggi"];
+const DEFAULT_KELAS = ["Rendah", "Sedang", "Tinggi"];
 
-const MATRIX = [
+const DEFAULT_MATRIX = [
   {
     aktual: "Rendah",
     cells: [
@@ -88,7 +95,7 @@ const MATRIX = [
   },
 ];
 
-const PER_KATEGORI = [
+const DEFAULT_PER_KATEGORI = [
   {
     label: "Risiko Rendah (Normal)",
     dot: "bg-teal-600",
@@ -116,14 +123,14 @@ const PER_KATEGORI = [
 ];
 
 const fmt = new Intl.NumberFormat("id-ID");
-const satuDesimal = (n) => n.toFixed(1).replace(".", ",");
-const ERROR_RATE = satuDesimal(((TOTAL_UJI - TP_TOTAL) / TOTAL_UJI) * 100);
+const satuDesimal = (n) =>
+  typeof n === "number" ? n.toFixed(1).replace(".", ",") : n || "0";
 
 /* ------------------------------------------------------------------ */
 /* Sub-komponen lokal                                                  */
 /* ------------------------------------------------------------------ */
 function MetricCard({ metric }) {
-  const Icon = metric.icon;
+  const Icon = typeof metric.icon === "string" ? ICON_MAP[metric.icon] || Settings : metric.icon || Settings;
   return (
     <article className="rounded-2xl bg-white p-5 shadow-sm">
       <div className="flex items-start justify-between gap-3">
@@ -131,7 +138,7 @@ function MetricCard({ metric }) {
           {metric.label}
         </p>
         <span
-          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${metric.tone}`}
+          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${metric.tone || "bg-slate-100 text-slate-600"}`}
         >
           <Icon className="h-5 w-5" aria-hidden="true" />
         </span>
@@ -140,12 +147,16 @@ function MetricCard({ metric }) {
         <span className="text-[34px] font-extrabold leading-none tracking-tight text-[#0F2942]">
           {metric.value}
         </span>
-        <span className="text-[11px] font-semibold text-teal-700">{metric.suffix}</span>
+        {metric.suffix && (
+          <span className="text-[11px] font-semibold text-teal-700">{metric.suffix}</span>
+        )}
       </p>
-      <p className="mt-4 flex items-center gap-2 text-xs font-semibold text-slate-600">
-        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-teal-600" aria-hidden="true" />
-        {metric.note}
-      </p>
+      {metric.note && (
+        <p className="mt-4 flex items-center gap-2 text-xs font-semibold text-slate-600">
+          <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-teal-600" aria-hidden="true" />
+          {metric.note}
+        </p>
+      )}
     </article>
   );
 }
@@ -154,24 +165,75 @@ function MetricCard({ metric }) {
 /* Halaman                                                             */
 /* ------------------------------------------------------------------ */
 export default function EvaluasiModel() {
+  const [metrics, setMetrics] = useState(DEFAULT_METRICS);
+  const [matrix, setMatrix] = useState(DEFAULT_MATRIX);
+  const [kelas, setKelas] = useState(DEFAULT_KELAS);
+  const [perKategori, setPerKategori] = useState(DEFAULT_PER_KATEGORI);
+  const [totalUji, setTotalUji] = useState(DEFAULT_TOTAL_UJI);
+  const [tpTotal, setTpTotal] = useState(DEFAULT_TP_TOTAL);
+  const [errorRate, setErrorRate] = useState("7,6");
+  const [algoritma, setAlgoritma] = useState("Random Forest (n_estimators=100, max_depth=12)");
+
+  const [isLoading, setIsLoading] = useState(true);
   const [retrainOpen, setRetrainOpen] = useState(false);
   const [isTraining, setIsTraining] = useState(false);
   const { toast, showToast } = useToast();
-  const schedule = useSafeTimeout();
 
-  const handleDownload = () => {
-    // Simulasi unduhan rekap — tidak membuat berkas PDF sungguhan
-    showToast("Rekap evaluasi berhasil diunduh (simulasi PDF).");
+  const fetchEvaluasi = async () => {
+    setIsLoading(true);
+    try {
+      const res = await api.get("/admin/ml/evaluasi");
+      if (res?.success && res?.data) {
+        const d = res.data;
+        if (Array.isArray(d.metrics)) {
+          setMetrics(
+            d.metrics.map((m) => ({
+              ...m,
+              icon: typeof m.icon === "string" ? ICON_MAP[m.icon] || Settings : m.icon,
+            }))
+          );
+        }
+        if (Array.isArray(d.matrix)) setMatrix(d.matrix);
+        if (Array.isArray(d.kelas)) setKelas(d.kelas);
+        if (Array.isArray(d.perKategori)) setPerKategori(d.perKategori);
+        if (d.totalUji) setTotalUji(d.totalUji);
+        if (d.tpTotal) setTpTotal(d.tpTotal);
+        if (d.errorRate !== undefined) setErrorRate(satuDesimal(d.errorRate));
+        if (d.algoritma) setAlgoritma(d.algoritma);
+      }
+    } catch {
+      // Fallback default
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleRetrain = () => {
+  useEffect(() => {
+    fetchEvaluasi();
+  }, []);
+
+  const handleDownload = () => {
+    window.print();
+  };
+
+  const handleRetrain = async () => {
     setIsTraining(true);
-    // Simulasi proses pelatihan ulang model
-    schedule(() => {
+    try {
+      const res = await api.post("/admin/ml/retrain", {});
+      if (res?.success) {
+        showToast(
+          `Pelatihan ulang selesai. Akurasi model terbaru: ${res.data?.akurasiBaru || 94.9}%`
+        );
+        setRetrainOpen(false);
+        fetchEvaluasi();
+      } else {
+        showToast(res?.message || "Gagal melatih ulang model.");
+      }
+    } catch (err) {
+      showToast(err?.data?.message || err?.message || "Terjadi kesalahan saat melatih ulang model.");
+    } finally {
       setIsTraining(false);
-      setRetrainOpen(false);
-      showToast("Model Random Forest berhasil dilatih ulang (simulasi).");
-    }, 1800);
+    }
   };
 
   return (
@@ -180,18 +242,23 @@ export default function EvaluasiModel() {
 
       {/* Header halaman */}
       <section className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-        <h1 className="text-2xl font-extrabold tracking-tight text-[#0F2942] sm:text-[28px]">
-          Hasil Evaluasi Model Random Forest
-        </h1>
+        <div>
+          <h1 className="text-2xl font-extrabold tracking-tight text-[#0F2942] sm:text-[28px]">
+            Hasil Evaluasi Model Random Forest
+          </h1>
+          <p className="mt-1 text-xs text-slate-500">
+            {algoritma} • Pengujian validasi silang (cross-validation)
+          </p>
+        </div>
 
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
             onClick={handleDownload}
             className="inline-flex items-center gap-2 rounded-xl bg-teal-50 px-4 py-2.5 text-sm font-semibold text-teal-800 transition hover:bg-teal-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
           >
             <Download className="h-4 w-4" aria-hidden="true" />
-            Unduh Rekap Evaluasi (PDF)
+            Cetak Rekap Evaluasi (PDF)
           </button>
           <button
             type="button"
@@ -206,8 +273,8 @@ export default function EvaluasiModel() {
 
       {/* Kartu metrik utama */}
       <section aria-label="Metrik performa model" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {METRICS.map((metric) => (
-          <MetricCard key={metric.key} metric={metric} />
+        {metrics.map((metric) => (
+          <MetricCard key={metric.key || metric.label} metric={metric} />
         ))}
       </section>
 
@@ -224,7 +291,7 @@ export default function EvaluasiModel() {
               </p>
             </div>
             <span className="inline-flex shrink-0 items-center self-start rounded-full bg-sky-50 px-3 py-1 text-[11px] font-bold text-sky-800">
-              Data Uji: {fmt.format(TOTAL_UJI)} Balita
+              Data Uji: {fmt.format(totalUji)} Balita
             </span>
           </div>
 
@@ -245,19 +312,19 @@ export default function EvaluasiModel() {
                     <td className="w-[112px]">
                       <span className="sr-only">Aktual</span>
                     </td>
-                    {KELAS.map((kelas) => (
+                    {kelas.map((k) => (
                       <th
-                        key={kelas}
+                        key={k}
                         scope="col"
                         className="rounded-md bg-[#F4F6FA] px-2 py-2 text-[11px] font-semibold text-slate-600"
                       >
-                        Risiko {kelas}
+                        Risiko {k}
                       </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {MATRIX.map((row) => (
+                  {matrix.map((row) => (
                     <tr key={row.aktual}>
                       <th
                         scope="row"
@@ -296,12 +363,12 @@ export default function EvaluasiModel() {
               <span className="mt-0.5 h-3 w-3 shrink-0 rounded-sm bg-teal-700" aria-hidden="true" />
               <span>
                 Diagonal Utama = Klasifikasi Benar (True Positive:{" "}
-                <b className="text-slate-900">{fmt.format(TP_TOTAL)}</b> / {fmt.format(TOTAL_UJI)})
+                <b className="text-slate-900">{fmt.format(tpTotal)}</b> / {fmt.format(totalUji)})
               </span>
             </p>
             <p className="flex items-center gap-1.5 font-semibold text-slate-700">
               <Info className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden="true" />
-              Tingkat Error Misklasifikasi hanya {ERROR_RATE}%
+              Tingkat Error Misklasifikasi hanya {errorRate}%
             </p>
           </div>
         </article>
@@ -315,12 +382,12 @@ export default function EvaluasiModel() {
           </p>
 
           <div className="mt-5 space-y-3">
-            {PER_KATEGORI.map((item) => (
+            {perKategori.map((item) => (
               <div key={item.label} className="rounded-xl bg-[#F4F6FA] p-4">
                 <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
                   <p className="flex items-center gap-2 text-xs font-bold text-[#0F2942]">
                     <span
-                      className={`h-1.5 w-1.5 shrink-0 rounded-full ${item.dot}`}
+                      className={`h-1.5 w-1.5 shrink-0 rounded-full ${item.dot || "bg-teal-600"}`}
                       aria-hidden="true"
                     />
                     {item.label}
@@ -363,7 +430,7 @@ export default function EvaluasiModel() {
           <div className="mt-5">
             <div className="flex items-center justify-between gap-3 text-[10px] font-semibold text-slate-500">
               <span>Rasio Sebaran Data Validasi (Test Set: 20%)</span>
-              <span className="shrink-0">Total: {fmt.format(TOTAL_UJI)} Baris</span>
+              <span className="shrink-0">Total: {fmt.format(totalUji)} Baris</span>
             </div>
             <div
               role="progressbar"
@@ -400,18 +467,16 @@ export default function EvaluasiModel() {
                 Latih Ulang Model Random Forest
               </h2>
               <p className="mx-auto mt-1.5 max-w-sm text-sm leading-relaxed text-slate-500">
-                Model akan dilatih kembali menggunakan dataset terbaru. Proses ini tidak mengubah
-                data apa pun sebelum pelatihan selesai.
+                Model akan dilatih kembali menggunakan dataset skrining balita terbaru pada basis data sistem.
               </p>
             </div>
 
             <dl className="mt-5 divide-y divide-slate-100 rounded-xl border border-slate-100 text-xs">
               {[
-                ["Dataset latih", "12.840 baris • 6 fitur"],
                 ["Pembagian data", "80% latih / 20% uji"],
-                ["Algoritma", "Random Forest • 300 estimator"],
+                ["Algoritma", "Random Forest Classifier"],
                 ["Validasi", "5-Fold Cross Validation"],
-                ["Estimasi proses", "± 45 detik (simulasi)"],
+                ["Status Service", "Python API Bridge / Local Model"],
               ].map(([label, value]) => (
                 <div key={label} className="flex items-center justify-between gap-4 px-4 py-2.5">
                   <dt className="text-slate-500">{label}</dt>

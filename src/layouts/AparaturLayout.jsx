@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { FileText, LayoutDashboard, MapPin, TrendingUp, Users } from "lucide-react";
 import DashboardLayout from "./DashboardLayout";
+import { getUser } from "../services/api";
 
 const NAV_ITEMS = [
   { to: "/aparatur/dashboard", label: "Dashboard", short: "Dashboard", icon: LayoutDashboard },
@@ -11,8 +12,11 @@ const NAV_ITEMS = [
 ];
 
 export default function AparaturLayout() {
-  // MOCK — ganti dengan data user dari auth context / API
-  const [user] = useState({ name: "Varghi Ganteng", role: "Aparatur Desa" });
+  const sessionUser = getUser();
+  const [user] = useState({
+    name: sessionUser?.name || "Varghi Ganteng",
+    role: sessionUser?.role === "APARATUR" ? "Aparatur Desa" : sessionUser?.role || "Aparatur Desa",
+  });
 
   return <DashboardLayout navItems={NAV_ITEMS} user={user} maxWidth="max-w-6xl" />;
 } 

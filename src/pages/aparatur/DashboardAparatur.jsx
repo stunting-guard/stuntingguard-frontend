@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import {
   AlertCircle,
   AlertTriangle,
@@ -9,15 +9,15 @@ import {
   CheckCircle2,
   ChevronRight,
   Droplet,
+  Loader2,
   Map as MapIcon,
   ShieldCheck,
   Smile,
 } from "lucide-react";
+import { api } from "../../services/api";
 
-/* ------------------------- MOCK DATA ------------------------- */
-// TODO: ganti dengan response API (mis. GET /api/aparatur/dashboard)
-// Semua angka ringkasan di bawah DIHITUNG dari data ini, jadi tidak perlu diisi manual.
-const DUSUN = [
+/* ------------------------- FALLBACK DATA ------------------------- */
+const DEFAULT_DUSUN = [
   { id: 1, nama: "Melati", zona: "Merah", kasus: 24, balita: 120, prioritas: "PMT Ekstra", icon: AlertCircle },
   { id: 2, nama: "Mawar", zona: "Kuning", kasus: 18, balita: 110, prioritas: "Sanitasi & Akses Air Bersih", icon: Droplet },
   { id: 3, nama: "Kenanga", zona: "Hijau", kasus: 8, balita: 105, prioritas: "Pemantauan Rutin Posyandu Bulanan", icon: CheckCircle2 },
@@ -34,23 +34,32 @@ const ZONA_STYLE = {
     dot: "bg-red-600",
     bar: "bg-red-800",
     text: "text-red-800",
-    row: "",
+    row: "hover:bg-red-50/40",
   },
   Kuning: {
     chip: "bg-amber-50 text-amber-700",
     dot: "bg-amber-500",
     bar: "bg-amber-800",
     text: "text-amber-800",
-    row: "",
+    row: "hover:bg-amber-50/40",
   },
   Hijau: {
     chip: "bg-teal-50 text-teal-700",
     dot: "bg-teal-600",
     bar: "bg-teal-700",
     text: "text-teal-800",
-    row: "",
+    row: "hover:bg-teal-50/40",
   },
 };
+
+function resolveDusunIcon(zona, prioritas = "") {
+  const p = prioritas.toLowerCase();
+  if (p.includes("air") || p.includes("sanitasi")) return Droplet;
+  if (p.includes("edukasi") || p.includes("asuh")) return BookOpen;
+  if (zona === "Merah") return AlertCircle;
+  if (zona === "Kuning") return Droplet;
+  return CheckCircle2;
+}
 
 /* ------------------------- Sub-komponen ------------------------- */
 function StatCard({ label, value, unit, note, badge, side, icon: Icon, tone = "teal" }) {
@@ -106,12 +115,59 @@ function StatCard({ label, value, unit, note, badge, side, icon: Icon, tone = "t
 
 /* ------------------------- Halaman ------------------------- */
 export default function DashboardAparatur() {
-  const [dusun] = useState(DUSUN);
+  const navigate = useNavigate();
+  const [dusun, setDusun] = useState(DEFAULT_DUSUN);
+  const [summaryData, setSummaryData] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Ringkasan dihitung dari data dusun
-  const totalBalita = dusun.reduce((s, d) => s + d.balita, 0);
-  const totalKasus = dusun.reduce((s, d) => s + d.kasus, 0);
-  const persenKasus = ((totalKasus / totalBalita) * 100).toFixed(1);
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadDashboard() {
+      try {
+        const res = await api.get("/aparatur/dashboard");
+        if (!isMounted) return;
+
+        if (res?.success && res?.data) {
+          if (Array.isArray(res.data.dusun) && res.data.dusun.length > 0) {
+            const mapped = res.data.dusun.map((d) => ({
+              id: d.id,
+              nama: d.namaSingkat || d.nama.replace(/^Dusun\s+/i, ""),
+              fullNama: d.nama,
+              zona: d.zona || "Hijau",
+              kasus: Number(d.kasus) || 0,
+              balita: Number(d.balita) || 100,
+              prioritas: d.prioritas || "Pemantauan Rutin",
+              icon: resolveDusunIcon(d.zona, d.prioritas),
+            }));
+            setDusun(mapped);
+          }
+          if (res.data.summary) {
+            setSummaryData(res.data.summary);
+          }
+        }
+      } catch {
+        // Fallback default
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    }
+
+    loadDashboard();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Ringkasan dihitung dari data dusun atau dari backend summary
+  const totalBalita = summaryData?.totalBalita ?? dusun.reduce((s, d) => s + d.balita, 0);
+  const totalKasus = summaryData?.totalKasus ?? dusun.reduce((s, d) => s + d.kasus, 0);
+  const persenKasus =
+    summaryData?.persenKasus !== undefined
+      ? String(summaryData.persenKasus)
+      : totalBalita > 0
+      ? ((totalKasus / totalBalita) * 100).toFixed(1)
+      : "0";
   const dusunAman = dusun.filter((d) => d.zona === "Hijau");
 
   return (
@@ -125,9 +181,16 @@ export default function DashboardAparatur() {
             DATA KELUARGA
           </Link>
         </nav>
-        <h1 className="mt-1.5 text-2xl font-bold text-[#0F2942] sm:text-3xl">
-          Dashboard Aparatur Desa
-        </h1>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h1 className="mt-1.5 text-2xl font-bold text-[#0F2942] sm:text-3xl">
+            Dashboard Aparatur Desa
+          </h1>
+          {isLoading && (
+            <span className="inline-flex items-center gap-1.5 text-xs text-slate-400">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Memperbarui data...
+            </span>
+          )}
+        </div>
       </header>
 
       {/* Kartu ringkasan */}
@@ -169,7 +232,7 @@ export default function DashboardAparatur() {
               Zona Hijau Rendah
             </>
           }
-          side={dusunAman.map((d) => d.nama).join(" & ")}
+          side={dusunAman.map((d) => d.nama).join(" & ") || "Terpantau"}
         />
       </section>
 
@@ -183,27 +246,43 @@ export default function DashboardAparatur() {
             <div>
               <h2 className="text-base font-bold text-[#0F2942]">Sebaran Risiko Berdasarkan Dusun</h2>
               <p className="mt-0.5 text-xs text-slate-500">
-                Klasifikasi kerentanan gizi per posyandu terintegrasi
+                Klasifikasi kerentanan gizi per posyandu terintegrasi • Klik baris dusun untuk melihat peta wilayah
               </p>
             </div>
           </div>
-          <span className="self-start rounded-full bg-slate-100 px-3 py-1.5 text-[11px] font-medium text-slate-600">
-            Total {dusun.length} Posyandu Aktif
-          </span>
+          <div className="flex items-center gap-2">
+            <Link
+              to="/aparatur/peta-wilayah"
+              className="inline-flex items-center gap-1.5 rounded-full border border-teal-200 bg-teal-50 px-3 py-1.5 text-[11px] font-semibold text-teal-800 transition hover:bg-teal-100"
+            >
+              Lihat Peta Spasial
+              <ChevronRight className="h-3 w-3" />
+            </Link>
+            <span className="rounded-full bg-slate-100 px-3 py-1.5 text-[11px] font-medium text-slate-600">
+              Total {dusun.length} Posyandu Aktif
+            </span>
+          </div>
         </div>
 
         <ul className="mt-5 divide-y divide-slate-100 border-t border-slate-100">
           {dusun.map((d) => {
-            const z = ZONA_STYLE[d.zona];
-            const prevalensi = (d.kasus / d.balita) * 100;
+            const z = ZONA_STYLE[d.zona] || ZONA_STYLE.Hijau;
+            const prevalensi = d.balita > 0 ? (d.kasus / d.balita) * 100 : 0;
             const lebar = Math.min(100, (prevalensi / PREVALENSI_SKALA_MAKS) * 100);
-            const Icon = d.icon;
+            const Icon = d.icon || AlertCircle;
 
             return (
-              <li key={d.id} className="py-4">
+              <li
+                key={d.id}
+                onClick={() => navigate(`/aparatur/peta-wilayah?dusunId=${d.id}`)}
+                className={`group cursor-pointer rounded-xl py-4 transition ${z.row}`}
+                title={`Buka peta detail Dusun ${d.nama}`}
+              >
                 <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
                   <div className="flex items-center gap-2.5">
-                    <h3 className="text-sm font-semibold text-[#0F2942]">Dusun {d.nama}</h3>
+                    <h3 className="text-sm font-semibold text-[#0F2942] group-hover:text-[#1B8A5A] transition">
+                      Dusun {d.nama}
+                    </h3>
                     <span
                       className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-semibold ${z.chip}`}
                     >
@@ -211,12 +290,15 @@ export default function DashboardAparatur() {
                       Zona {d.zona}
                     </span>
                   </div>
-                  <p className={`text-lg font-extrabold ${z.text}`}>
-                    {d.kasus} Kasus{" "}
-                    <span className="text-[11px] font-semibold">
-                      (Prevalensi {prevalensi.toFixed(1).replace(".", ",")}%)
-                    </span>
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <p className={`text-lg font-extrabold ${z.text}`}>
+                      {d.kasus} Kasus{" "}
+                      <span className="text-[11px] font-semibold">
+                        (Prevalensi {prevalensi.toFixed(1).replace(".", ",")}%)
+                      </span>
+                    </p>
+                    <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-[#1B8A5A] transition" />
+                  </div>
                 </div>
 
                 <div
