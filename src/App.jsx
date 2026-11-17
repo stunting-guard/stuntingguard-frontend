@@ -44,6 +44,9 @@ export default function App() {
             <Route path="dashboard" element={<DashboardAnalitik />} />
             <Route path="input-data" element={<InputDataKeluarga />} />
             <Route path="hasil" element={<HasilKlasifikasi />} />
+            <Route path="hasil/:id" element={<HasilKlasifikasi />} />
+            <Route path="hasil-klasifikasi" element={<HasilKlasifikasi />} />
+            <Route path="hasil-klasifikasi/:id" element={<HasilKlasifikasi />} />
             <Route path="riwayat" element={<RiwayatPrediksi />} />
           </Route>
         </Route>
