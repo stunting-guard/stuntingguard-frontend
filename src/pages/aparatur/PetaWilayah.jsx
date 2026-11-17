@@ -1,9 +1,9 @@
 // src/pages/aparatur/PetaWilayah.jsx
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Printer,
   ChevronDown,
-  Compass,
   TriangleAlert,
   Info,
   BadgeCheck,
@@ -15,7 +15,9 @@ import {
   ShieldCheck,
   Baby,
   Navigation,
+  Loader2,
 } from "lucide-react";
+import { api } from "../../services/api";
 
 /* ------------------------------------------------------------------ */
 /* Style per zona (class ditulis penuh agar terdeteksi Tailwind v4)     */
@@ -68,9 +70,9 @@ const ZONA = {
 };
 
 /* ------------------------------------------------------------------ */
-/* Mock data                                                           */
+/* Fallback data                                                      */
 /* ------------------------------------------------------------------ */
-const MOCK_DUSUN = [
+const DEFAULT_DUSUN = [
   {
     id: 1,
     nama: "Dusun Melati",
@@ -143,6 +145,20 @@ const LEGEND = [
   { label: "Zona Hijau (Rendah/Aman)", cls: "bg-teal-50 text-teal-700", dot: "bg-teal-700" },
 ];
 
+function resolveMapStatIcon(stat, isStat1 = true, zona = "hijau") {
+  const lbl = String(stat?.label || "").toLowerCase();
+  if (isStat1) {
+    if (zona === "merah" || zona === "kuning") return Users;
+    if (zona === "aman") return ShieldCheck;
+    return CircleCheck;
+  }
+  if (lbl.includes("sanitasi") || lbl.includes("rumah")) return House;
+  if (lbl.includes("air") || lbl.includes("sumur")) return Droplets;
+  if (lbl.includes("vitamin")) return Pill;
+  if (lbl.includes("mpasi") || lbl.includes("balita")) return Baby;
+  return Info;
+}
+
 /* ------------------------------------------------------------------ */
 /* Sub-komponen lokal                                                  */
 /* ------------------------------------------------------------------ */
@@ -171,9 +187,10 @@ function ZoneSummaryCard({
 }
 
 function DusunCard({ dusun, active, onSelect, onHover }) {
-  const z = ZONA[dusun.zona];
-  const Stat1 = dusun.stat1.icon;
-  const Stat2 = dusun.stat2.icon;
+  const zKey = dusun.zona === "aman" ? "aman" : String(dusun.zona).toLowerCase();
+  const z = ZONA[zKey] || ZONA.hijau;
+  const Stat1 = dusun.stat1?.icon || Users;
+  const Stat2 = dusun.stat2?.icon || House;
 
   return (
     <article
@@ -197,8 +214,8 @@ function DusunCard({ dusun, active, onSelect, onHover }) {
           </p>
         </div>
         <div className="text-right">
-          <p className={`text-xl font-bold ${z.persen}`}>{dusun.prevalensi.toFixed(1)}%</p>
-          <p className="text-[11px] text-slate-500">{dusun.prevalensiLabel}</p>
+          <p className={`text-xl font-bold ${z.persen}`}>{Number(dusun.prevalensi || 0).toFixed(1)}%</p>
+          <p className="text-[11px] text-slate-500">{dusun.prevalensiLabel || "Prevalensi"}</p>
         </div>
       </div>
 
@@ -206,12 +223,12 @@ function DusunCard({ dusun, active, onSelect, onHover }) {
         {[
           { s: dusun.stat1, Icon: Stat1 },
           { s: dusun.stat2, Icon: Stat2 },
-        ].map(({ s, Icon }) => (
-          <div key={s.label} className="flex items-center gap-3">
+        ].map(({ s, Icon }, idx) => (
+          <div key={s?.label || idx} className="flex items-center gap-3">
             <Icon className={`h-5 w-5 shrink-0 ${z.persen}`} />
             <div>
-              <p className="text-sm font-bold text-slate-900">{s.nilai}</p>
-              <p className="text-[11px] text-slate-500">{s.label}</p>
+              <p className="text-sm font-bold text-slate-900">{s?.nilai || "-"}</p>
+              <p className="text-[11px] text-slate-500">{s?.label || "-"}</p>
             </div>
           </div>
         ))}
@@ -248,72 +265,72 @@ function ZonaMap({ dusunList, activeId, onHover, onSelect }) {
           className="stroke-slate-300"
           strokeWidth="4"
           strokeDasharray="10 8"
-          fill="none"
         />
         <path
-          d="M405 60 C 395 160, 420 220, 405 300 S 395 440, 410 520"
-          className="stroke-sky-300"
+          d="M410 30 V510"
+          className="stroke-slate-300"
+          strokeWidth="4"
+          strokeDasharray="10 8"
+        />
+        <path
+          d="M60 490 Q 250 350 430 270 T 800 60"
+          className="stroke-sky-300 fill-none"
           strokeWidth="6"
-          strokeDasharray="6 6"
-          fill="none"
         />
 
+        {/* Poligon wilayah dusun */}
         {dusunList.map((d) => {
-          const z = ZONA[d.zona];
-          const dim = activeId !== null && activeId !== d.id;
+          const zKey = d.zona === "aman" ? "aman" : String(d.zona).toLowerCase();
+          const z = ZONA[zKey] || ZONA.hijau;
+          const isActive = activeId === d.id;
+
           return (
             <g
               key={d.id}
-              tabIndex={0}
-              role="button"
-              aria-label={`${d.nama}, ${d.kasus} kasus`}
+              className="cursor-pointer transition"
               onMouseEnter={() => onHover(d.id)}
               onMouseLeave={() => onHover(null)}
-              onFocus={() => onHover(d.id)}
-              onBlur={() => onHover(null)}
               onClick={() => onSelect(d.id)}
-              onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onSelect(d.id)}
-              className={`cursor-pointer outline-none transition-opacity ${dim ? "opacity-40" : "opacity-100"}`}
             >
               <polygon
                 points={d.polygon}
-                strokeWidth={activeId === d.id ? 3 : 1.5}
-                strokeLinejoin="round"
-                className={z.polygon}
+                className={`${z.polygon} transition-all duration-200 ${
+                  isActive ? "stroke-slate-900 stroke-[3px] opacity-100" : "stroke-2 opacity-90 hover:opacity-100"
+                }`}
               />
-              <circle cx={d.pusat.x} cy={d.pusat.y - 20} r="30" className={z.ring} />
-              <circle cx={d.pusat.x} cy={d.pusat.y - 20} r="18" className={z.dot} />
-              <rect
-                x={d.pusat.x - 45}
-                y={d.pusat.y + 8}
-                width="90"
-                height="26"
-                rx="13"
-                className="fill-white"
-              />
-              <text
-                x={d.pusat.x}
-                y={d.pusat.y + 25}
-                textAnchor="middle"
-                className="fill-slate-800 text-[12px] font-bold"
-              >
-                {d.kasus} Balita
-              </text>
-              <text
-                x={d.labelPos.x}
-                y={d.labelPos.y}
-                textAnchor="middle"
-                className={`text-[13px] font-bold ${z.fill}`}
-              >
-                {d.nama}
-              </text>
+
+              {/* Titik pusat posyandu */}
+              {d.pusat && (
+                <>
+                  <circle
+                    cx={d.pusat.x}
+                    cy={d.pusat.y}
+                    r={isActive ? 18 : 12}
+                    className={`${z.ring} transition-all`}
+                  />
+                  <circle
+                    cx={d.pusat.x}
+                    cy={d.pusat.y}
+                    r={isActive ? 8 : 5}
+                    className={z.dot}
+                  />
+                </>
+              )}
+
+              {/* Label nama dusun */}
+              {d.labelPos && (
+                <text
+                  x={d.labelPos.x}
+                  y={d.labelPos.y}
+                  textAnchor="middle"
+                  className={`text-xs font-bold ${z.fill}`}
+                >
+                  {d.nama} ({Number(d.prevalensi || 0).toFixed(1)}%)
+                </text>
+              )}
             </g>
           );
         })}
-
-        {/* Titik pusat desa */}
-        <rect x="392" y="257" width="26" height="26" rx="6" className="fill-teal-800" />
-        <circle cx="405" cy="270" r="4" className="fill-white" />
       </svg>
     </div>
   );
@@ -323,29 +340,82 @@ function ZonaMap({ dusunList, activeId, onHover, onSelect }) {
 /* Halaman                                                             */
 /* ------------------------------------------------------------------ */
 export default function PetaWilayah() {
-  const [dusunList] = useState(MOCK_DUSUN);
-  const [filter, setFilter] = useState("semua"); // "semua" | id dusun (string)
-  const [hoverId, setHoverId] = useState(null);
+  const [searchParams] = useSearchParams();
+  const initialDusunId = searchParams.get("dusunId");
 
-  const selectedId = filter === "semua" ? null : Number(filter);
-  const activeId = hoverId ?? selectedId;
+  const [dusunList, setDusunList] = useState(DEFAULT_DUSUN);
+  const [activeId, setActiveId] = useState(initialDusunId ? Number(initialDusunId) : 1);
+  const [filterZona, setFilterZona] = useState("Semua");
+  const [isLoading, setIsLoading] = useState(true);
 
-  const visibleDusun = useMemo(
-    () => (selectedId === null ? dusunList : dusunList.filter((d) => d.id === selectedId)),
-    [dusunList, selectedId]
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadPeta() {
+      setIsLoading(true);
+      try {
+        const params = {
+          zona: filterZona !== "Semua" ? filterZona.toLowerCase() : undefined,
+        };
+
+        const res = await api.get("/aparatur/peta-wilayah", params);
+        if (!isMounted) return;
+
+        if (res?.success && res?.data?.dusun && Array.isArray(res.data.dusun) && res.data.dusun.length > 0) {
+          const mapped = res.data.dusun.map((d) => {
+            const zKey = d.zona === "aman" ? "aman" : String(d.zona).toLowerCase();
+            return {
+              ...d,
+              stat1: {
+                ...d.stat1,
+                icon: resolveMapStatIcon(d.stat1, true, zKey),
+              },
+              stat2: {
+                ...d.stat2,
+                icon: resolveMapStatIcon(d.stat2, false, zKey),
+              },
+            };
+          });
+          setDusunList(mapped);
+          if (initialDusunId && mapped.some((d) => d.id === Number(initialDusunId))) {
+            setActiveId(Number(initialDusunId));
+          } else if (mapped.length > 0 && !mapped.some((d) => d.id === activeId)) {
+            setActiveId(mapped[0].id);
+          }
+        }
+      } catch {
+        // Fallback default
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    }
+
+    loadPeta();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [filterZona, initialDusunId]);
+
+  const activeDusun = useMemo(
+    () => dusunList.find((d) => d.id === activeId) || dusunList[0] || DEFAULT_DUSUN[0],
+    [dusunList, activeId]
   );
 
-  const merah = dusunList.find((d) => d.zona === "merah");
-  const kuning = dusunList.find((d) => d.zona === "kuning");
-  const hijau = dusunList.filter((d) => d.zona === "hijau" || d.zona === "aman");
+  const dusunMerah = useMemo(() => dusunList.find((d) => d.zona === "merah") || dusunList[0], [dusunList]);
+  const dusunKuning = useMemo(() => dusunList.find((d) => d.zona === "kuning") || dusunList[1], [dusunList]);
+  const dusunAman = useMemo(
+    () => dusunList.filter((d) => d.zona === "hijau" || d.zona === "aman"),
+    [dusunList]
+  );
 
-  const handleSelect = (id) => setFilter((prev) => (prev === String(id) ? "semua" : String(id)));
+  const handlePrint = () => window.print();
 
   return (
     <div className="space-y-6">
       {/* Header halaman */}
       <section className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
-        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <nav
               aria-label="Breadcrumb"
@@ -356,137 +426,147 @@ export default function PetaWilayah() {
               <span className="text-red-600">Peta Wilayah</span>
             </nav>
             <h1 className="mt-2 text-2xl font-bold text-slate-900">
-              Peta Risiko Stunting Wilayah Desa
+              Peta Sebaran Risiko Geografis
             </h1>
+            <p className="mt-1 text-sm text-slate-500">
+              Visualisasi zonasi spasial stunting dan lokasi posyandu berbasis wilayah dusun.
+            </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
+            {/* Filter Zona */}
             <div className="relative">
               <select
-                value={filter}
-                onChange={(e) => setFilter(e.target.value)}
-                aria-label="Pilih dusun"
-                className="appearance-none rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-4 pr-10 text-sm font-semibold text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-700"
+                aria-label="Filter Zona"
+                value={filterZona}
+                onChange={(e) => setFilterZona(e.target.value)}
+                className="appearance-none rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-3.5 pr-8 text-xs font-semibold text-slate-700 outline-none transition focus:border-teal-600 focus:bg-white"
               >
-                <option value="semua">Pilih Dusun: Semua Wilayah</option>
-                {dusunList.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.nama}
-                  </option>
-                ))}
+                <option value="Semua">Semua Zona</option>
+                <option value="Merah">Zona Merah</option>
+                <option value="Kuning">Zona Kuning</option>
+                <option value="Hijau">Zona Hijau</option>
               </select>
-              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+              <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
             </div>
 
             <button
               type="button"
-              onClick={() => window.print()}
+              onClick={handlePrint}
               className="inline-flex items-center gap-2 rounded-xl bg-teal-800 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-teal-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-700 focus-visible:ring-offset-2"
             >
               <Printer className="h-4 w-4" />
-              Cetak Peta Wilayah
+              Cetak Peta
             </button>
           </div>
         </div>
       </section>
 
-      {/* Ringkasan zona */}
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      {/* Kartu ringkasan zona */}
+      <section className="grid gap-4 sm:grid-cols-3">
         <ZoneSummaryCard
-          label="Cakupan Wilayah"
-          labelCls="text-slate-600"
-          title={`${dusunList.length} Dusun`}
-          titleCls="text-slate-900"
-          icon={Compass}
-          iconCls="bg-slate-100 text-slate-600"
-        >
-          <span className="flex items-center gap-2">
-            <span className="h-1.5 w-1.5 rounded-full bg-teal-700" />
-            100% Terpetakan Secara Spasial
-          </span>
-        </ZoneSummaryCard>
-
-        <ZoneSummaryCard
-          label="Zona Merah (Prioritas 1)"
+          label="Zona Merah (Tinggi)"
           labelCls="text-red-700"
-          title={merah.nama}
+          title={dusunMerah ? `${dusunMerah.nama} (${dusunMerah.prevalensi.toFixed(1)}%)` : "-"}
           titleCls="text-red-700"
+          titleSize="text-xl"
           icon={TriangleAlert}
           iconCls="bg-red-50 text-red-600"
         >
-          <b className="text-red-700">{merah.kasus} Balita</b> Terkonfirmasi Risiko Tinggi
+          <p>
+            {dusunMerah?.kasus || 0} Kasus Risiko Tinggi • Prioritas intervensi bantuan PMT & perbaikan sanitasi
+          </p>
         </ZoneSummaryCard>
 
         <ZoneSummaryCard
-          label="Zona Kuning (Prioritas 2)"
+          label="Zona Kuning (Sedang)"
           labelCls="text-amber-800"
-          title={kuning.nama}
+          title={dusunKuning ? `${dusunKuning.nama} (${dusunKuning.prevalensi.toFixed(1)}%)` : "-"}
           titleCls="text-amber-800"
+          titleSize="text-xl"
           icon={Info}
           iconCls="bg-amber-50 text-amber-600"
         >
-          <b className="text-amber-800">{kuning.kasus} Balita</b> Tergolong Risiko Sedang
+          <p>
+            {dusunKuning?.kasus || 0} Kasus Risiko Sedang • Kebutuhan sanitasi & pemantauan air bersih
+          </p>
         </ZoneSummaryCard>
 
         <ZoneSummaryCard
           label="Zona Hijau (Aman)"
           labelCls="text-teal-700"
-          title={`Dusun ${hijau.map((d) => d.nama.replace("Dusun ", "")).join(" & ")}`}
-          titleCls="text-slate-900"
-          titleSize="text-xl"
+          title={`${dusunAman.map((d) => d.nama).join(" & ") || "Dusun Terkendali"}`}
+          titleCls="text-teal-700"
+          titleSize="text-lg"
           icon={BadgeCheck}
           iconCls="bg-teal-50 text-teal-700"
         >
-          <span className="flex items-center gap-2">
-            <span className="h-1.5 w-1.5 rounded-full bg-teal-700" />
-            Status Terkendali • Prevalensi Rendah
-          </span>
+          <p>
+            Prevalensi di bawah 8% • Pola asuh & cakupan imunisasi baik, pertahankan edukasi
+          </p>
         </ZoneSummaryCard>
       </section>
 
-      {/* Peta + daftar dusun */}
-      <section className="grid gap-6 xl:grid-cols-[1.1fr_1fr]">
-        <div className="self-start rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
-          <div className="flex flex-col gap-3 border-b border-slate-100 pb-4 lg:flex-row lg:items-start lg:justify-between">
+      {/* Konten utama: Peta + Kartu Dusun */}
+      <section className="grid gap-6 xl:grid-cols-[1.45fr_1fr]">
+        {/* Kolom Peta */}
+        <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <h2 className="text-lg font-bold text-slate-900">Peta Zonasi Dusun Desa Sukamaju</h2>
+              <h2 className="text-lg font-bold text-slate-900">Peta Spasial Desa</h2>
               <p className="mt-1 text-xs text-slate-500">
-                Luas Total Wilayah: 4.82 km² • Posyandu Utama {dusunList.length} Unit
+                Peta interaktif zonasi risiko stunting berbasis batas poligon geografis dusun
               </p>
             </div>
-            <ul className="flex flex-wrap gap-2">
-              {LEGEND.map((l) => (
+
+            <ul className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-100 bg-slate-50 p-1.5 text-xs font-semibold">
+              {LEGEND.map((item) => (
                 <li
-                  key={l.label}
-                  className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${l.cls}`}
+                  key={item.label}
+                  className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 ${item.cls}`}
                 >
-                  <span className={`h-2 w-2 rounded-full ${l.dot}`} />
-                  {l.label}
+                  <span className={`h-2 w-2 rounded-full ${item.dot}`} />
+                  {item.label}
                 </li>
               ))}
             </ul>
           </div>
 
-          <div className="mt-4">
-            <ZonaMap
-              dusunList={dusunList}
-              activeId={activeId}
-              onHover={setHoverId}
-              onSelect={handleSelect}
-            />
+          <div className="mt-5">
+            {isLoading ? (
+              <div className="flex min-h-[360px] flex-col items-center justify-center gap-2 rounded-2xl bg-slate-50">
+                <Loader2 className="h-8 w-8 animate-spin text-teal-700" />
+                <p className="text-xs text-slate-400">Memuat peta spasial wilayah...</p>
+              </div>
+            ) : (
+              <ZonaMap
+                dusunList={dusunList}
+                activeId={activeId}
+                onHover={setActiveId}
+                onSelect={setActiveId}
+              />
+            )}
           </div>
         </div>
 
+        {/* Kolom Kartu Dusun */}
         <div className="space-y-4">
-          {visibleDusun.map((d) => (
-            <DusunCard
-              key={d.id}
-              dusun={d}
-              active={activeId === d.id}
-              onSelect={handleSelect}
-              onHover={setHoverId}
-            />
-          ))}
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-bold text-slate-900">Rincian Wilayah Dusun</h2>
+            <span className="text-xs text-slate-500">{dusunList.length} Dusun Terdata</span>
+          </div>
+
+          <div className="space-y-3">
+            {dusunList.map((dusun) => (
+              <DusunCard
+                key={dusun.id}
+                dusun={dusun}
+                active={activeDusun.id === dusun.id}
+                onSelect={setActiveId}
+                onHover={setActiveId}
+              />
+            ))}
+          </div>
         </div>
       </section>
     </div>

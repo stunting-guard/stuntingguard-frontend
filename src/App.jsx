@@ -59,6 +59,7 @@ export default function App() {
             <Route path="data-keluarga" element={<DataKeluarga />} />
             <Route path="peta-wilayah" element={<PetaWilayah />} />
             <Route path="hasil-prediksi" element={<HasilPrediksi />} />
+            <Route path="hasil-prediksi/:id" element={<HasilPrediksi />} />
             <Route path="laporan" element={<Laporan />} />
           </Route>
         </Route>
