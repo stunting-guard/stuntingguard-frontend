@@ -2,6 +2,7 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { LogOut, User } from "lucide-react";
 import BrandLogo from "../components/common/BrandLogo";
 import bgAnak from "../assets/images/login-bg-anak.jpg";
+import { api } from "../services/api";
 
 /**
  * Kerangka dashboard yang dipakai semua role (Kader, Aparatur, Admin).
@@ -22,9 +23,14 @@ export default function DashboardLayout({
   const navigate = useNavigate();
   const isAdmin = variant === "admin";
 
-  const handleLogout = () => {
-    // TODO: hapus token / panggil endpoint logout
-    navigate(logoutTo);
+  const handleLogout = async () => {
+    try {
+      await api.logout();
+    } catch (err) {
+      console.warn("Logout warning:", err);
+    } finally {
+      navigate(logoutTo);
+    }
   };
 
   return (
