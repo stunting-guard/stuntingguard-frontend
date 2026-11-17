@@ -227,11 +227,12 @@ export default function RiwayatPrediksi() {
           <>
             {/* Desktop: tabel */}
             <div className="hidden overflow-x-auto md:block">
-              <table className="w-full min-w-[720px] text-left text-xs">
+              <table className="w-full min-w-[760px] text-left text-xs">
                 <thead className="bg-slate-100 text-[11px] font-semibold text-[#0F2942]">
                   <tr>
                     <th className="px-6 py-3.5">Tanggal Prediksi</th>
-                    <th className="px-3 py-3.5">Keluarga / Balita</th>
+                    <th className="px-3 py-3.5">Identitas Keluarga & Ibu</th>
+                    <th className="px-3 py-3.5">Balita</th>
                     <th className="px-3 py-3.5">Wilayah</th>
                     <th className="px-3 py-3.5">Tingkat Risiko</th>
                     <th className="px-3 py-3.5">Faktor Dominan</th>
@@ -247,7 +248,18 @@ export default function RiwayatPrediksi() {
                       </td>
                       <td className="px-3 py-4">
                         <p className="font-semibold text-[#0F2942]">{r.kepala}</p>
-                        <p className="text-[11px] text-slate-400">Balita: {r.balita}</p>
+                        {r.namaIbu && r.namaIbu !== "-" && (
+                          <p className="text-[11px] text-slate-500">Ibu: {r.namaIbu}</p>
+                        )}
+                        {r.noKk && r.noKk !== "-" && (
+                          <p className="font-mono text-[10px] text-slate-400">KK: {r.noKk}</p>
+                        )}
+                      </td>
+                      <td className="px-3 py-4">
+                        <p className="font-semibold text-[#0F2942]">{r.balita}</p>
+                        {r.kodeKeluarga && (
+                          <p className="font-mono text-[10px] text-slate-400">{r.kodeKeluarga}</p>
+                        )}
                       </td>
                       <td className="whitespace-nowrap px-3 py-4 text-slate-600">
                         {r.rw} / {r.rt}
@@ -255,7 +267,9 @@ export default function RiwayatPrediksi() {
                       <td className="px-3 py-4">
                         <RiskBadge level={r.risiko} />
                       </td>
-                      <td className="px-3 py-4 text-slate-600">{r.faktor}</td>
+                      <td className="px-3 py-4 text-slate-600">
+                        <span className="line-clamp-2">{r.faktor}</span>
+                      </td>
                       <td className="px-6 py-4 text-right">
                         <DetailLink id={r.id} />
                       </td>
@@ -272,7 +286,13 @@ export default function RiwayatPrediksi() {
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="text-sm font-semibold text-[#0F2942]">{r.kepala}</p>
-                      <p className="text-[11px] text-slate-400">Balita: {r.balita}</p>
+                      {r.namaIbu && r.namaIbu !== "-" && (
+                        <p className="text-xs text-slate-500">Ibu: {r.namaIbu}</p>
+                      )}
+                      {r.noKk && r.noKk !== "-" && (
+                        <p className="font-mono text-[10px] text-slate-400">No. KK: {r.noKk}</p>
+                      )}
+                      <p className="mt-1 text-xs font-medium text-[#1B8A5A]">Balita: {r.balita}</p>
                     </div>
                     <RiskBadge level={r.risiko} />
                   </div>
