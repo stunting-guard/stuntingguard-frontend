@@ -1,30 +1,33 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   AlertTriangle,
+  ArrowUpRight,
   CalendarDays,
-  ChevronDown,
   Download,
+  Eye,
   Filter,
   Lightbulb,
   Loader2,
+  MapPin,
   PieChart,
+  Plus,
+  RotateCcw,
   ShieldCheck,
+  Sparkles,
   Users,
   X,
 } from "lucide-react";
 import RiskBadge from "../../components/common/RiskBadge";
 import Pagination from "../../components/common/Pagination";
-import { api } from "../../services/api";
+import { api, getUser } from "../../services/api";
 
 /* ------------------------- FALLBACK DATA ------------------------- */
-const DEFAULT_FILTER_OPTIONS = {
-  kecamatan: ["Semua Kecamatan", "Kec. Cibadak", "Kec. Cikalong"],
-  desa: ["Semua Desa", "Desa Sukamaju", "Desa Sukamulya"],
-};
-
 const DEFAULT_SUMMARY = {
   totalKK: 0,
   tinggi: 0,
+  sedang: 0,
+  rendah: 0,
   persenTinggi: 0,
 };
 
@@ -50,31 +53,6 @@ const KATEGORI_CHIP = {
 const PAGE_SIZE = 5;
 
 /* ------------------------- Sub-komponen ------------------------- */
-function FilterSelect({ value, onChange, options, label, icon: Icon }) {
-  return (
-    <div className="relative">
-      {Icon && (
-        <Icon className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-      )}
-      <select
-        aria-label={label}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className={`w-full appearance-none rounded-lg border border-slate-200 bg-slate-50 py-2 pr-8 text-xs font-medium text-[#0F2942] outline-none transition focus:border-[#1B8A5A] focus:ring-2 focus:ring-[#1B8A5A]/25 ${
-          Icon ? "pl-9" : "pl-3"
-        }`}
-      >
-        {options.map((o) => (
-          <option key={o} value={o}>
-            {o}
-          </option>
-        ))}
-      </select>
-      <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-    </div>
-  );
-}
-
 function StatCard({ label, value, unit, desc, icon: Icon, iconWrap, accent = "" }) {
   return (
     <div
@@ -96,11 +74,16 @@ function StatCard({ label, value, unit, desc, icon: Icon, iconWrap, accent = "" 
 }
 
 function FaktorChips({ items }) {
-  if (!items || items.length === 0) return null;
+  if (!items || items.length === 0) {
+    return <span className="text-slate-400 text-xs">-</span>;
+  }
   return (
     <div className="flex flex-wrap gap-1.5">
       {items.map((f) => (
-        <span key={f} className="rounded-md bg-slate-100 px-2 py-1 text-[11px] text-slate-600">
+        <span
+          key={f}
+          className="inline-block rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600 ring-1 ring-slate-200/50"
+        >
           {f}
         </span>
       ))}
@@ -108,14 +91,18 @@ function FaktorChips({ items }) {
   );
 }
 
-/* ------------------------- Halaman ------------------------- */
+/* ------------------------- Halaman Utama ------------------------- */
 export default function DashboardAnalitik() {
-  const [filterOptions, setFilterOptions] = useState(DEFAULT_FILTER_OPTIONS);
+  const currentUser = getUser();
+  const dusunKader = currentUser?.dusun;
+  const dusunNama = dusunKader?.nama || "Dusun Melati";
+  const dusunRw = dusunKader?.rw || "RW 01";
+  const dusunPosyandu = dusunKader?.posyandu || "Posyandu Melati";
+
   const [filters, setFilters] = useState({
-    kecamatan: "Semua Kecamatan",
-    desa: "Semua Desa",
     startDate: "",
     endDate: "",
+    risiko: "Semua",
   });
   const [page, setPage] = useState(1);
 
@@ -131,30 +118,6 @@ export default function DashboardAnalitik() {
   const [isLoading, setIsLoading] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
 
-  // Ambil opsi wilayah master
-  useEffect(() => {
-    let isMounted = true;
-    async function loadWilayah() {
-      try {
-        const res = await api.get("/master/wilayah");
-        if (isMounted && res?.success && res?.data) {
-          const kec = ["Semua Kecamatan", ...(res.data.kecamatan || [])];
-          const des = ["Semua Desa", ...(res.data.desa || [])];
-          setFilterOptions({
-            kecamatan: [...new Set(kec)],
-            desa: [...new Set(des)],
-          });
-        }
-      } catch {
-        // Fallback default
-      }
-    }
-    loadWilayah();
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
   // Ambil data dashboard dari endpoint GET /api/kader/dashboard
   useEffect(() => {
     let isMounted = true;
@@ -163,11 +126,9 @@ export default function DashboardAnalitik() {
       setIsLoading(true);
       try {
         const params = {
-          kecamatan:
-            filters.kecamatan !== "Semua Kecamatan" ? filters.kecamatan : undefined,
-          desa: filters.desa !== "Semua Desa" ? filters.desa : undefined,
           start_date: filters.startDate || undefined,
           end_date: filters.endDate || undefined,
+          risiko: filters.risiko !== "Semua" ? filters.risiko.toUpperCase() : undefined,
           page,
           limit: PAGE_SIZE,
         };
@@ -209,7 +170,7 @@ export default function DashboardAnalitik() {
           }
         }
       } catch {
-        // Gunakan state sebelumnya
+        // Fallback to previous state
       } finally {
         if (isMounted) setIsLoading(false);
       }
@@ -222,8 +183,8 @@ export default function DashboardAnalitik() {
     };
   }, [filters, page]);
 
-  const setFilter = (key) => (value) => {
-    setFilters((prev) => ({ ...prev, [key]: value }));
+  const setFilterRisiko = (risiko) => {
+    setFilters((prev) => ({ ...prev, risiko }));
     setPage(1);
   };
 
@@ -240,8 +201,12 @@ export default function DashboardAnalitik() {
     setPage(1);
   };
 
-  const resetDateFilter = () => {
-    setFilters((prev) => ({ ...prev, startDate: "", endDate: "" }));
+  const resetAllFilters = () => {
+    setFilters({
+      startDate: "",
+      endDate: "",
+      risiko: "Semua",
+    });
     setPage(1);
   };
 
@@ -266,6 +231,7 @@ export default function DashboardAnalitik() {
       });
       if (filters.startDate) params.set("start_date", filters.startDate);
       if (filters.endDate) params.set("end_date", filters.endDate);
+      if (filters.risiko !== "Semua") params.set("risiko", filters.risiko);
 
       await api.downloadBlob(
         `/laporan/export?${params.toString()}`,
@@ -280,47 +246,90 @@ export default function DashboardAnalitik() {
 
   return (
     <div className="space-y-6">
-      {/* Judul & Header */}
-      <div className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm">
-        <span className="inline-flex items-center gap-1.5 text-[10px] font-bold tracking-wide text-[#1B8A5A]">
-          <span className="h-1.5 w-1.5 rounded-full bg-[#1B8A5A]" aria-hidden="true" />
-          KONSOL POSYANDU • ANALISIS RISIKO STUNTING
-        </span>
-        <h1 className="mt-1.5 text-2xl font-bold text-[#0F2942] sm:text-3xl">Dashboard Analitik</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Ringkasan komprehensif risiko stunting balita berdasarkan klasifikasi Random Forest tervalidasi.
-        </p>
-      </div>
+      {/* Header & Action Bar */}
+      <section className="flex flex-col gap-4 rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm md:flex-row md:items-center md:justify-between">
+        <div>
+          <span className="inline-flex items-center gap-1.5 text-[10px] font-bold tracking-wide text-[#1B8A5A]">
+            <span className="h-1.5 w-1.5 rounded-full bg-[#1B8A5A]" aria-hidden="true" />
+            KONSOL KADER POSYANDU • ANALISIS RISIKO STUNTING
+          </span>
+          <h1 className="mt-1 text-2xl font-bold text-[#0F2942] sm:text-3xl">Dashboard Analitik</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Ringkasan komprehensif risiko stunting balita berdasarkan klasifikasi Random Forest tervalidasi.
+          </p>
+
+          {/* Badge Cakupan Wilayah Dusun */}
+          <div className="mt-3.5 flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800">
+              <MapPin className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+              Wilayah Penugasan: <strong className="font-bold">{dusunNama}</strong> ({dusunRw})
+            </span>
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
+              <ShieldCheck className="h-3.5 w-3.5 text-slate-500 shrink-0" />
+              {dusunPosyandu}
+            </span>
+          </div>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+          <Link
+            to="/kader/input-data"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600"
+          >
+            <Plus className="h-4 w-4" />
+            Input Skrining Baru
+          </Link>
+          <button
+            type="button"
+            onClick={handleDownload}
+            disabled={isExporting}
+            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-[#0F2942] px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-[#0F2942]/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1B8A5A] disabled:opacity-75"
+          >
+            {isExporting ? (
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <Download className="h-4 w-4" aria-hidden="true" />
+            )}
+            {isExporting ? "Mengunduh..." : "Unduh Laporan (Excel)"}
+          </button>
+        </div>
+      </section>
 
       {/* Filter Bar */}
       <section
         aria-label="Filter data"
-        className="flex flex-col gap-4 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm lg:flex-row lg:items-center lg:justify-between"
+        className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm"
       >
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center flex-1">
-          <p className="flex items-center gap-2 text-xs font-semibold text-slate-600 shrink-0">
-            <Filter className="h-4 w-4 text-teal-700" aria-hidden="true" />
-            Filter Data:
-          </p>
-          <div className="grid flex-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(20rem,2fr)]">
-            <FilterSelect
-              label="Kecamatan"
-              value={filters.kecamatan}
-              onChange={setFilter("kecamatan")}
-              options={filterOptions.kecamatan}
-            />
-            <FilterSelect
-              label="Desa"
-              value={filters.desa}
-              onChange={setFilter("desa")}
-              options={filterOptions.desa}
-            />
-            <div className="flex min-w-0 items-end gap-2 sm:col-span-2 xl:col-span-1">
-              <label className="min-w-0 flex-1">
-                <span className="mb-1 flex items-center gap-1 text-[10px] font-semibold text-slate-500">
-                  <CalendarDays className="h-3 w-3" aria-hidden="true" />
-                  Tanggal Mulai
-                </span>
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-wrap items-center gap-3 flex-1">
+            <span className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-500 shrink-0">
+              <Filter className="h-3.5 w-3.5 text-teal-700" aria-hidden="true" />
+              Filter Analitik:
+            </span>
+
+            {/* Filter Status Risiko */}
+            <div className="flex flex-wrap items-center gap-1.5">
+              {["Semua", "Tinggi", "Sedang", "Rendah"].map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => setFilterRisiko(r)}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                    filters.risiko === r
+                      ? "bg-teal-800 text-white shadow-sm"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  }`}
+                >
+                  {r === "Semua" ? "Semua Risiko" : `Risiko ${r}`}
+                </button>
+              ))}
+            </div>
+
+            {/* Rentang Tanggal */}
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs">
+                <CalendarDays className="h-3.5 w-3.5 text-slate-400 shrink-0" aria-hidden="true" />
                 <input
                   id="dashboard-start-date"
                   type="date"
@@ -328,14 +337,9 @@ export default function DashboardAnalitik() {
                   max={filters.endDate || undefined}
                   onChange={setDateFilter("startDate")}
                   aria-label="Tanggal mulai"
-                  className="w-full min-w-0 rounded-lg border border-slate-200 bg-slate-50 px-2 py-2 text-xs font-medium text-[#0F2942] outline-none transition focus:border-[#1B8A5A] focus:ring-2 focus:ring-[#1B8A5A]/25"
+                  className="bg-transparent text-xs font-medium text-[#0F2942] outline-none"
                 />
-              </label>
-              <label className="min-w-0 flex-1">
-                <span className="mb-1 flex items-center gap-1 text-[10px] font-semibold text-slate-500">
-                  <CalendarDays className="h-3 w-3" aria-hidden="true" />
-                  Tanggal Akhir
-                </span>
+                <span className="text-slate-400">—</span>
                 <input
                   id="dashboard-end-date"
                   type="date"
@@ -343,79 +347,73 @@ export default function DashboardAnalitik() {
                   min={filters.startDate || undefined}
                   onChange={setDateFilter("endDate")}
                   aria-label="Tanggal akhir"
-                  className="w-full min-w-0 rounded-lg border border-slate-200 bg-slate-50 px-2 py-2 text-xs font-medium text-[#0F2942] outline-none transition focus:border-[#1B8A5A] focus:ring-2 focus:ring-[#1B8A5A]/25"
+                  className="bg-transparent text-xs font-medium text-[#0F2942] outline-none"
                 />
-              </label>
-              {(filters.startDate || filters.endDate) && (
-                <button
-                  type="button"
-                  onClick={resetDateFilter}
-                  aria-label="Reset rentang tanggal"
-                  title="Reset rentang tanggal"
-                  className="mb-px inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1B8A5A]"
-                >
-                  <X className="h-4 w-4" aria-hidden="true" />
-                </button>
-              )}
+              </div>
             </div>
           </div>
-        </div>
-        <button
-          type="button"
-          onClick={handleDownload}
-          disabled={isExporting}
-          className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-[#0F2942] px-5 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-[#0F2942]/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1B8A5A] disabled:opacity-75"
-        >
-          {isExporting ? (
-            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-          ) : (
-            <Download className="h-4 w-4" aria-hidden="true" />
+
+          {/* Reset Filter Button */}
+          {(filters.startDate || filters.endDate || filters.risiko !== "Semua") && (
+            <button
+              type="button"
+              onClick={resetAllFilters}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 shrink-0 self-start lg:self-center"
+            >
+              <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+              Reset Filter
+            </button>
           )}
-          {isExporting ? "Mengunduh..." : "Unduh Laporan"}
-        </button>
+        </div>
       </section>
 
-      {/* Kartu Ringkasan KPI (grid-cols-1 md:grid-cols-3) */}
+      {/* Kartu Ringkasan KPI (3 Kolom) */}
       <section aria-label="Ringkasan" className="grid gap-4 md:grid-cols-3 lg:gap-5">
         <StatCard
           label="TOTAL KELUARGA TERDATA"
           value={fmt(summary.totalKK)}
           unit="KK"
-          desc="Terdaftar pada sistem sensus desa"
+          desc={`Cakupan sensus balita di ${dusunNama}`}
           icon={Users}
           iconWrap="bg-emerald-50 text-[#1B8A5A]"
         />
         <StatCard
-          label="RISIKO TINGGI"
+          label="BALITA RISIKO TINGGI"
           value={fmt(summary.tinggi)}
-          unit="Keluarga"
-          desc="Prioritas intervensi penanganan segera"
+          unit="Kasus"
+          desc="Prioritas intervensi gizi & PMT segera"
           icon={AlertTriangle}
           iconWrap="bg-red-50 text-red-500"
           accent="border-l-4 border-l-red-500"
         />
         <StatCard
-          label="% RISIKO TINGGI"
+          label="% PREVALENSI RISIKO TINGGI"
           value={`${summary.persenTinggi ?? 0}%`}
-          desc="Dari total populasi balita terdata"
+          desc="Proporsi balita risiko tinggi di dusun"
           icon={PieChart}
-          iconWrap="bg-sky-50 text-sky-500"
+          iconWrap="bg-sky-50 text-sky-600"
         />
       </section>
 
-      {/* Tabel Prioritas + Faktor */}
-      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-        <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
+      {/* Area Konten Utama (Grid 12 Kolom) */}
+      <div className="grid gap-6 lg:grid-cols-12 items-start">
+        {/* Kolom Kiri: Tabel Keluarga Prioritas (lg:col-span-7 / xl:col-span-8) */}
+        <section className="lg:col-span-7 xl:col-span-8 overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
           <div className="flex flex-col gap-2 p-6 sm:flex-row sm:items-start sm:justify-between border-b border-slate-100">
             <div>
-              <h2 className="text-sm font-bold text-[#0F2942]">Daftar Keluarga Prioritas Intervensi</h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-bold text-[#0F2942]">Daftar Keluarga Prioritas Intervensi</h2>
+                <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-bold text-slate-600">
+                  {totalCount} Terdata
+                </span>
+              </div>
               <p className="mt-0.5 text-xs text-slate-500">
-                Sasaran aksi intervensi perbaikan sanitasi dan nutrisi spesifik
+                Sasaran aksi intervensi perbaikan sanitasi, PMT, dan nutrisi di {dusunNama}
               </p>
             </div>
             <p className="flex items-center gap-1.5 text-[11px] font-medium text-[#1B8A5A]">
               <ShieldCheck className="h-4 w-4 shrink-0" aria-hidden="true" />
-              Data terenkripsi &amp; terlindungi
+              Tervalidasi Random Forest
             </p>
           </div>
 
@@ -430,34 +428,49 @@ export default function DashboardAnalitik() {
             </div>
           ) : (
             <>
-              {/* Desktop: tabel */}
+              {/* Desktop: Tabel Lega */}
               <div className="hidden overflow-x-auto md:block">
                 <table className="w-full min-w-[640px] text-left text-xs">
                   <thead className="bg-slate-50 text-[10px] font-bold tracking-wide text-slate-500">
                     <tr>
-                      <th className="px-5 py-3">NO / ID KELUARGA</th>
-                      <th className="px-3 py-3">KEPALA KELUARGA</th>
-                      <th className="px-3 py-3">BALITA &amp; USIA</th>
+                      <th className="px-5 py-3">ID KELUARGA</th>
+                      <th className="px-4 py-3">KEPALA KELUARGA</th>
+                      <th className="px-4 py-3">BALITA &amp; USIA</th>
                       <th className="px-3 py-3">WILAYAH</th>
                       <th className="px-3 py-3">STATUS RISIKO</th>
-                      <th className="px-3 py-3">FAKTOR PEMICU UTAMA</th>
+                      <th className="px-4 py-3">FAKTOR PEMICU UTAMA</th>
+                      <th className="px-4 py-3 text-center">AKSI</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {prioritasItems.map((r) => (
                       <tr key={r.id} className="transition hover:bg-slate-50/70">
-                        <td className="whitespace-nowrap px-5 py-3.5 font-mono text-[11px] text-slate-500">{r.id}</td>
-                        <td className="px-3 py-3.5 font-semibold text-[#0F2942]">{r.kepala}</td>
-                        <td className="px-3 py-3.5">
+                        <td className="whitespace-nowrap px-5 py-3.5 font-mono text-[11px] font-semibold text-slate-600">
+                          {r.kodeKeluarga || r.id}
+                        </td>
+                        <td className="px-4 py-3.5 font-semibold text-[#0F2942]">{r.kepala}</td>
+                        <td className="px-4 py-3.5">
                           <p className="font-medium text-[#0F2942]">{r.balita}</p>
                           <p className="text-[11px] text-slate-400">{r.usia}</p>
                         </td>
-                        <td className="whitespace-nowrap px-3 py-3.5 text-slate-600">{r.rw}</td>
+                        <td className="whitespace-nowrap px-3 py-3.5 text-slate-600 font-medium">
+                          {r.rw}
+                        </td>
                         <td className="px-3 py-3.5">
                           <RiskBadge level={r.status} />
                         </td>
-                        <td className="px-3 py-3.5">
+                        <td className="px-4 py-3.5">
                           <FaktorChips items={r.faktor} />
+                        </td>
+                        <td className="px-4 py-3.5 text-center">
+                          <Link
+                            to={`/kader/hasil-klasifikasi/${r.skriningId || r.id}`}
+                            className="inline-flex items-center gap-1 rounded-lg border border-teal-200 bg-teal-50 px-2.5 py-1 text-[11px] font-semibold text-teal-800 transition hover:bg-teal-100"
+                            title="Lihat Detail Hasil Klasifikasi"
+                          >
+                            <Eye className="h-3.5 w-3.5" />
+                            Detail
+                          </Link>
                         </td>
                       </tr>
                     ))}
@@ -465,14 +478,14 @@ export default function DashboardAnalitik() {
                 </table>
               </div>
 
-              {/* Mobile: kartu */}
+              {/* Mobile: Kartu */}
               <ul className="divide-y divide-slate-100 border-t border-slate-100 md:hidden">
                 {prioritasItems.map((r) => (
-                  <li key={r.id} className="space-y-2 px-5 py-4">
+                  <li key={r.id} className="space-y-2.5 px-5 py-4">
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="text-sm font-semibold text-[#0F2942]">{r.kepala}</p>
-                        <p className="font-mono text-[11px] text-slate-400">{r.id}</p>
+                        <p className="font-mono text-[11px] text-slate-400">{r.kodeKeluarga || r.id}</p>
                       </div>
                       <RiskBadge level={r.status} />
                     </div>
@@ -480,6 +493,15 @@ export default function DashboardAnalitik() {
                       {r.balita} · {r.usia} · {r.rw}
                     </p>
                     <FaktorChips items={r.faktor} />
+                    <div className="pt-1">
+                      <Link
+                        to={`/kader/hasil-klasifikasi/${r.skriningId || r.id}`}
+                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-teal-700 hover:text-teal-900"
+                      >
+                        Lihat Detail Hasil Klasifikasi
+                        <ArrowUpRight className="h-3.5 w-3.5" />
+                      </Link>
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -495,111 +517,118 @@ export default function DashboardAnalitik() {
           </div>
         </section>
 
-        <section className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h2 className="text-sm font-bold text-[#0F2942]">Faktor Pemicu Dominan</h2>
-              <p className="mt-0.5 text-xs text-slate-500">
-                Analisis Machine Learning (Random Forest Feature Importance)
+        {/* Kolom Kanan: Faktor Pemicu Dominan & Sebaran RW (lg:col-span-5 / xl:col-span-4) */}
+        <div className="lg:col-span-5 xl:col-span-4 space-y-6">
+          {/* Kartu Faktor Dominan */}
+          <section className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-base font-bold text-[#0F2942]">Faktor Pemicu Dominan</h2>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  Feature Importance Algoritma Random Forest
+                </p>
+              </div>
+              <span className="shrink-0 inline-flex items-center gap-1 rounded-md bg-teal-50 px-2.5 py-1 text-[10px] font-bold text-teal-800">
+                <Sparkles className="h-3 w-3" />
+                Random Forest
+              </span>
+            </div>
+
+            <ul className="mt-5 space-y-4">
+              {faktorList.map((f, i) => (
+                <li key={f.label}>
+                  <div className="mb-1.5 flex items-center justify-between gap-3 text-xs">
+                    <span className="font-semibold text-[#0F2942]">
+                      {i + 1}. {f.label}
+                    </span>
+                    <span className="font-bold text-[#1B8A5A]">{f.value}%</span>
+                  </div>
+                  <div
+                    className="h-2 overflow-hidden rounded-full bg-slate-100"
+                    role="progressbar"
+                    aria-valuenow={f.value}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                  >
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${f.bar}`}
+                      style={{ width: `${Math.min(100, f.value)}%` }}
+                    />
+                  </div>
+                </li>
+              ))}
+            </ul>
+
+            <div className="mt-6 flex gap-2.5 rounded-xl border border-emerald-100 bg-emerald-50/70 p-3.5 text-xs leading-relaxed text-slate-600">
+              <Lightbulb className="mt-0.5 h-4 w-4 shrink-0 text-[#1B8A5A]" aria-hidden="true" />
+              <p>
+                <b className="text-[#0F2942]">Rekomendasi Utama:</b> Prioritaskan perbaikan sanitasi jamban sehat, akses air bersih, dan intervensi PMT pangan hewani pada keluarga sasaran.
               </p>
             </div>
-            <span className="shrink-0 rounded-md bg-slate-100 px-2 py-1 text-[10px] font-semibold text-slate-500">
-              RF-v1
-            </span>
-          </div>
+          </section>
 
-          <ul className="mt-5 space-y-4">
-            {faktorList.map((f, i) => (
-              <li key={f.label}>
-                <div className="mb-1.5 flex items-center justify-between gap-3 text-xs">
-                  <span className="font-semibold text-[#0F2942]">
-                    {i + 1}. {f.label}
-                  </span>
-                  <span className="font-bold text-[#1B8A5A]">{f.value}%</span>
-                </div>
-                <div
-                  className="h-2 overflow-hidden rounded-full bg-slate-100"
-                  role="progressbar"
-                  aria-valuenow={f.value}
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                >
-                  <div className={`h-full rounded-full ${f.bar}`} style={{ width: `${Math.min(100, f.value)}%` }} />
-                </div>
-              </li>
-            ))}
-          </ul>
+          {/* Kartu Sebaran Risiko per RW */}
+          <section className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h2 className="text-base font-bold text-[#0F2942]">Sebaran Risiko per Wilayah (RW)</h2>
+                <p className="mt-0.5 text-xs text-slate-500">Zonasi kerentanan di cakupan {dusunNama}</p>
+              </div>
+              <ul className="flex items-center gap-3 text-[11px] text-slate-500" aria-label="Legenda">
+                {[
+                  ["Rendah", "bg-emerald-500"],
+                  ["Sedang", "bg-amber-400"],
+                  ["Tinggi", "bg-red-500"],
+                ].map(([l, c]) => (
+                  <li key={l} className="flex items-center gap-1.5">
+                    <span className={`h-2 w-2 rounded-sm ${c}`} aria-hidden="true" />
+                    {l}
+                  </li>
+                ))}
+              </ul>
+            </div>
 
-          <div className="mt-6 flex gap-2.5 rounded-xl border border-emerald-100 bg-emerald-50/70 p-3.5 text-xs leading-relaxed text-slate-600">
-            <Lightbulb className="mt-0.5 h-4 w-4 shrink-0 text-[#1B8A5A]" aria-hidden="true" />
-            <p>
-              <b className="text-[#0F2942]">Temuan Utama:</b> Sanitasi dan akses air bersih
-              berkontribusi signifikan terhadap total akumulasi risiko stunting balita di wilayah survei.
-            </p>
-          </div>
-        </section>
-      </div>
-
-      {/* Sebaran risiko per RW */}
-      <section className="rounded-2xl bg-white p-5 shadow-md sm:p-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h2 className="text-sm font-bold text-[#0F2942]">Sebaran Risiko per Wilayah (RW)</h2>
-            <p className="mt-0.5 text-xs text-slate-500">Zonasi tingkat kerentanan sosio-ekonomi per unit RW</p>
-          </div>
-          <ul className="flex items-center gap-4 text-[11px] text-slate-500" aria-label="Legenda">
-            {[
-              ["Rendah", "bg-emerald-500"],
-              ["Sedang", "bg-amber-400"],
-              ["Tinggi", "bg-red-500"],
-            ].map(([l, c]) => (
-              <li key={l} className="flex items-center gap-1.5">
-                <span className={`h-2 w-2 rounded-sm ${c}`} aria-hidden="true" />
-                {l}
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <ul className="mt-5 space-y-3 border-t border-slate-100 pt-5">
-          {sebaranRw.map((r) => {
-            const isPriority = r.rw === prioritasRW && r.persenTinggi > 0;
-            return (
-              <li
-                key={r.rw}
-                className={`rounded-xl px-3 py-2.5 ${isPriority ? "border border-red-100 bg-red-50/60" : ""}`}
-              >
-                <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs">
-                  <span className="flex items-center gap-2 font-semibold text-[#0F2942]">
-                    {r.rw} ({r.kk} KK)
-                    {isPriority && (
-                      <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-700">
-                        Prioritas 1
+            <ul className="mt-5 space-y-3 border-t border-slate-100 pt-5">
+              {sebaranRw.map((r) => {
+                const isPriority = r.rw === prioritasRW && r.persenTinggi > 0;
+                return (
+                  <li
+                    key={r.rw}
+                    className={`rounded-xl px-3.5 py-3 ${isPriority ? "border border-red-100 bg-red-50/60" : "bg-slate-50/50"}`}
+                  >
+                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs">
+                      <span className="flex items-center gap-2 font-semibold text-[#0F2942]">
+                        {r.rw} ({r.kk} KK)
+                        {isPriority && (
+                          <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-700">
+                            Prioritas 1
+                          </span>
+                        )}
                       </span>
-                    )}
-                  </span>
-                  <span className={`rounded-md px-2 py-0.5 text-[11px] font-semibold ${KATEGORI_CHIP[r.kategori] || KATEGORI_CHIP.Rendah}`}>
-                    {r.persenTinggi}% ({r.kategori})
-                  </span>
-                </div>
-                <div
-                  className="flex h-3 overflow-hidden rounded-full bg-slate-100"
-                  role="img"
-                  aria-label={`${r.rw}: Tinggi ${r.segmen?.tinggi || 0}%, Sedang ${r.segmen?.sedang || 0}%, Rendah ${r.segmen?.rendah || 0}%`}
-                >
-                  <div className="bg-red-500" style={{ width: `${r.segmen?.tinggi || 0}%` }} />
-                  <div className="bg-amber-400" style={{ width: `${r.segmen?.sedang || 0}%` }} />
-                  <div className="bg-emerald-500" style={{ width: `${r.segmen?.rendah || 0}%` }} />
-                </div>
-              </li>
-            );
-          })}
-        </ul>
+                      <span className={`rounded-md px-2 py-0.5 text-[11px] font-semibold ${KATEGORI_CHIP[r.kategori] || KATEGORI_CHIP.Rendah}`}>
+                        {r.persenTinggi}% ({r.kategori})
+                      </span>
+                    </div>
+                    <div
+                      className="flex h-2.5 overflow-hidden rounded-full bg-slate-200"
+                      role="img"
+                      aria-label={`${r.rw}: Tinggi ${r.segmen?.tinggi || 0}%, Sedang ${r.segmen?.sedang || 0}%, Rendah ${r.segmen?.rendah || 0}%`}
+                    >
+                      <div className="bg-red-500 transition-all duration-300" style={{ width: `${r.segmen?.tinggi || 0}%` }} />
+                      <div className="bg-amber-400 transition-all duration-300" style={{ width: `${r.segmen?.sedang || 0}%` }} />
+                      <div className="bg-emerald-500 transition-all duration-300" style={{ width: `${r.segmen?.rendah || 0}%` }} />
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
 
-        <p className="mt-4 border-t border-slate-100 pt-3 text-[11px] text-slate-400">
-          * Proporsi horizontal: Merah (Tinggi), Kuning (Sedang), Hijau (Rendah)
-        </p>
-      </section>
+            <p className="mt-4 border-t border-slate-100 pt-3 text-[11px] text-slate-400">
+              * Proporsi horizontal: Merah (Tinggi), Kuning (Sedang), Hijau (Rendah)
+            </p>
+          </section>
+        </div>
+      </div>
     </div>
   );
 }

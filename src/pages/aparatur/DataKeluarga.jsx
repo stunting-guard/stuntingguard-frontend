@@ -15,6 +15,7 @@ import {
   Loader2,
   Search,
   Filter,
+  RotateCw,
 } from "lucide-react";
 import { api } from "../../services/api";
 
@@ -333,6 +334,32 @@ export default function DataKeluarga() {
     [dusunList, riskField]
   );
 
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [processMessage, setProcessMessage] = useState(null);
+
+  const handleBatchProcess = async () => {
+    if (!window.confirm("Jalankan pemrosesan ulang seluruh data skrining desa dengan model Random Forest terbaru?")) {
+      return;
+    }
+    setIsProcessing(true);
+    setProcessMessage(null);
+    try {
+      const res = await api.post("/aparatur/proses-prediksi", {});
+      if (res?.success) {
+        setProcessMessage(`Berhasil memproses ulang ${res.data?.totalDiproses ?? 0} data skrining dengan model Random Forest!`);
+        const refreshed = await api.get("/aparatur/data-keluarga");
+        if (refreshed?.success && refreshed?.data) {
+          if (Array.isArray(refreshed.data.dusun)) setDusunList(refreshed.data.dusun);
+          if (Array.isArray(refreshed.data.faktor)) setFaktorList(refreshed.data.faktor);
+        }
+      }
+    } catch (err) {
+      alert(err?.data?.message || err?.message || "Gagal memproses ulang data.");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const handlePrint = () => window.print();
 
   const handleDownload = async () => {
@@ -378,6 +405,15 @@ export default function DataKeluarga() {
           <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
+              onClick={handleBatchProcess}
+              disabled={isProcessing}
+              className="inline-flex items-center gap-2 rounded-xl border border-teal-200 bg-teal-50 px-4 py-2.5 text-sm font-semibold text-teal-800 transition hover:bg-teal-100 disabled:opacity-50"
+            >
+              <RotateCw className={`h-4 w-4 ${isProcessing ? "animate-spin" : ""}`} />
+              {isProcessing ? "Memproses..." : "Proses Ulang Model RF"}
+            </button>
+            <button
+              type="button"
               onClick={handlePrint}
               className="inline-flex items-center gap-2 rounded-xl border border-teal-700 bg-white px-4 py-2.5 text-sm font-semibold text-teal-700 transition hover:bg-teal-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-700 focus-visible:ring-offset-2"
             >
@@ -399,6 +435,16 @@ export default function DataKeluarga() {
             </button>
           </div>
         </div>
+
+        {processMessage && (
+          <div
+            role="status"
+            className="mt-4 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold text-emerald-800"
+          >
+            <CircleCheck className="h-4 w-4 text-emerald-600 shrink-0" />
+            <span>{processMessage}</span>
+          </div>
+        )}
 
         {/* Filter bar pencarian & zona */}
         <div className="mt-6 flex flex-col gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
