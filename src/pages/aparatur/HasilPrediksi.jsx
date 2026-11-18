@@ -27,11 +27,81 @@ import { api } from "../../services/api";
 /* ------------------------------------------------------------------ */
 /* Helper normalisasi data                                            */
 /* ------------------------------------------------------------------ */
+const isObjectValue = (value) =>
+  value !== null && typeof value === "object" && !Array.isArray(value);
+
+const readNestedPrimitive = (value, keys) => {
+  if (value === null || value === undefined) return undefined;
+  if (!isObjectValue(value)) return value;
+
+  for (const key of keys) {
+    const nested = value[key];
+    if (
+      nested !== undefined &&
+      nested !== null &&
+      !isObjectValue(nested) &&
+      String(nested).trim() !== ""
+    ) {
+      return nested;
+    }
+  }
+
+  return undefined;
+};
+
+const readAnthroValue = (value) =>
+  readNestedPrimitive(value, [
+    "nilai",
+    "value",
+    "angka",
+    "tinggiBadan",
+    "beratBadan",
+  ]);
+
+const readAnthroScore = (value) =>
+  readNestedPrimitive(value, [
+    "zScore",
+    "zscore",
+    "z_score",
+    "score",
+    "nilaiZ",
+  ]);
+
+const readAnthroStatus = (value) =>
+  readNestedPrimitive(value, ["status", "label", "kategori"]);
+
+const readTextValue = (value) =>
+  readNestedPrimitive(value, [
+    "label",
+    "value",
+    "nilai",
+    "status",
+    "kategori",
+    "text",
+    "nama",
+  ]);
+
 const toNumberOrNull = (value) => {
-  if (value === null || value === undefined || value === "") return null;
-  const num = Number(value);
+  const primitive = readAnthroValue(value);
+  if (primitive === null || primitive === undefined || primitive === "") {
+    return null;
+  }
+  const num = Number(primitive);
   return Number.isFinite(num) ? num : null;
 };
+
+const toTextOr = (value, fallback = "-") => {
+  if (isObjectValue(value)) return fallback;
+  if (value === null || value === undefined) return fallback;
+  const text = String(value).trim();
+  return text || fallback;
+};
+
+const firstDefined = (...values) =>
+  values.find(
+    (value) =>
+      value !== undefined && value !== null && String(value).trim() !== ""
+  );
 
 function normalizeStatus(value) {
   const raw = String(value || "").toUpperCase();
@@ -44,8 +114,108 @@ function normalizeStatus(value) {
 const STATUS_BADGE = {
   Tinggi: "bg-red-50 text-red-700 ring-1 ring-red-200",
   Sedang: "bg-amber-50 text-amber-700 ring-1 ring-amber-200",
-  Rendah: "bg-teal-50 text-teal-700 ring-1 ring-teal-200",
+  Rendah: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200",
 };
+
+const HASIL_THEME = {
+  Rendah: {
+    banner:
+      "border border-emerald-100 border-t-4 border-t-emerald-500 bg-gradient-to-r from-emerald-50 via-white to-teal-50",
+    pill: "bg-emerald-600 text-white",
+    pillLabel: "RISIKO RENDAH (AMAN)",
+    priority: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200",
+    priorityLabel: "Pemantauan Rutin (Prioritas 3)",
+    confidenceOuter: "border border-emerald-100 bg-white",
+    confidenceBox: "border border-emerald-200 bg-emerald-50/60",
+    confidenceValue: "text-emerald-600",
+    confidenceLabel: "text-emerald-500",
+    confidenceNote: "text-emerald-600",
+    divider: "border-emerald-100",
+    footerIcon: "text-emerald-600",
+  },
+  Sedang: {
+    banner:
+      "border border-amber-100 border-t-4 border-t-amber-500 bg-gradient-to-r from-amber-50 via-white to-yellow-50",
+    pill: "bg-amber-500 text-white",
+    pillLabel: "RISIKO SEDANG",
+    priority: "bg-amber-50 text-amber-700 ring-1 ring-amber-200",
+    priorityLabel: "Status Prioritas Intervensi 2",
+    confidenceOuter: "border border-amber-100 bg-white",
+    confidenceBox: "border border-amber-200 bg-amber-50/60",
+    confidenceValue: "text-amber-600",
+    confidenceLabel: "text-amber-500",
+    confidenceNote: "text-amber-600",
+    divider: "border-amber-100",
+    footerIcon: "text-amber-600",
+  },
+  Tinggi: {
+    banner:
+      "border border-red-100 border-t-4 border-t-red-500 bg-gradient-to-r from-red-50 via-white to-amber-50",
+    pill: "bg-red-600 text-white",
+    pillLabel: "RISIKO TINGGI (STUNTING)",
+    priority: "bg-red-50 text-red-700 ring-1 ring-red-200",
+    priorityLabel: "Status Prioritas Intervensi 1",
+    confidenceOuter: "border border-red-100 bg-white",
+    confidenceBox: "border border-red-200 bg-red-50/60",
+    confidenceValue: "text-red-600",
+    confidenceLabel: "text-red-500",
+    confidenceNote: "text-red-600",
+    divider: "border-red-100",
+    footerIcon: "text-red-600",
+  },
+};
+
+const ANTROPOMETRI_TONE = {
+  emerald: {
+    border: "border-emerald-300",
+    bar: "bg-emerald-500",
+    icon: "bg-emerald-50 text-emerald-600",
+    badge: "bg-emerald-50 text-emerald-700",
+    zScore: "text-emerald-600",
+  },
+  amber: {
+    border: "border-amber-300",
+    bar: "bg-amber-500",
+    icon: "bg-amber-50 text-amber-600",
+    badge: "bg-amber-50 text-amber-700",
+    zScore: "text-amber-700",
+  },
+  red: {
+    border: "border-red-300",
+    bar: "bg-red-500",
+    icon: "bg-red-50 text-red-600",
+    badge: "bg-red-50 text-red-700",
+    zScore: "text-red-600",
+  },
+  neutral: {
+    border: "border-slate-200",
+    bar: "bg-slate-400",
+    icon: "bg-slate-50 text-slate-500",
+    badge: "bg-slate-100 text-slate-600",
+    zScore: "text-slate-500",
+  },
+};
+
+function resolveAntropometriTone(status) {
+  const raw = String(status || "").trim().toLowerCase();
+
+  if (!raw || raw === "-") return ANTROPOMETRI_TONE.neutral;
+  if (raw.includes("sangat pendek") || raw.includes("gizi buruk")) {
+    return ANTROPOMETRI_TONE.red;
+  }
+  if (
+    raw.includes("pendek") ||
+    raw.includes("gizi kurang") ||
+    raw.includes("gizi lebih")
+  ) {
+    return ANTROPOMETRI_TONE.amber;
+  }
+  if (raw.includes("normal") || raw.includes("tinggi") || raw.includes("gizi baik")) {
+    return ANTROPOMETRI_TONE.emerald;
+  }
+
+  return ANTROPOMETRI_TONE.neutral;
+}
 
 const INTERVENSI_TONE = {
   teal: {
@@ -84,8 +254,21 @@ function ambilDaftarIntervensi(data) {
 }
 
 function mapHasil(data = {}, meta = {}) {
+  const balitaData =
+    data.balita && typeof data.balita === "object" ? data.balita : {};
+  const antropometriData =
+    data.antropometri && typeof data.antropometri === "object"
+      ? data.antropometri
+      : {};
+  const lingkunganData =
+    data.lingkungan && typeof data.lingkungan === "object"
+      ? data.lingkungan
+      : {};
+  const keluargaData =
+    data.keluarga && typeof data.keluarga === "object" ? data.keluarga : {};
+
   const status = normalizeStatus(
-    data.statusRisiko || data.risiko || data.status || meta.risiko
+    firstDefined(data.statusRisiko, data.risiko, data.status, meta.risiko)
   );
   const prioritasRaw = data.prioritas;
   const prioritas =
@@ -94,11 +277,132 @@ function mapHasil(data = {}, meta = {}) {
       : String(prioritasRaw || "").includes("1")
         ? 1
         : 2;
-  const nama = data.namaBalita || data.balita?.nama || meta.nama || "-";
+  const nama =
+    firstDefined(
+      data.namaBalita,
+      balitaData.nama,
+      data.nama,
+      meta.nama
+    ) ?? "-";
   const nik =
-    data.nikBalita || data.nik || data.balita?.nik || data.noKk || meta.nik || "-";
+    firstDefined(
+      data.nikBalita,
+      balitaData.nik,
+      data.nik,
+      data.noKk,
+      meta.nik
+    ) ?? "-";
   const usia =
-    data.usiaBulan ?? data.usia ?? data.balita?.usiaBulan ?? meta.usia ?? "-";
+    firstDefined(
+      data.usiaBulan,
+      data.usia,
+      balitaData.usiaBulan,
+      meta.usia
+    ) ?? "-";
+  const jenisKelamin =
+    firstDefined(
+      data.jenisKelamin,
+      balitaData.jenisKelamin,
+      meta.jenisKelamin
+    ) ?? "-";
+
+  const tinggiBadan = toNumberOrNull(
+    firstDefined(
+      readAnthroValue(data.tinggiBadan),
+      data.tinggiBadanNilai,
+      readAnthroValue(antropometriData.tinggiBadan),
+      antropometriData.tinggiBadanNilai,
+      data.tinggiBadanCm
+    )
+  );
+  const zScoreTb = toNumberOrNull(
+    firstDefined(
+      readAnthroScore(data.zScoreTb),
+      readAnthroScore(data.tinggiBadan),
+      readAnthroScore(antropometriData.zScoreTb),
+      readAnthroScore(antropometriData.tinggiBadan),
+      data.zScoreTinggi
+    )
+  );
+  const statusTb = toTextOr(
+    firstDefined(
+      readAnthroStatus(data.statusTb),
+      readAnthroStatus(data.tinggiBadan),
+      readAnthroStatus(antropometriData.statusTb),
+      readAnthroStatus(antropometriData.tinggiBadan),
+      data.statusTinggi
+    )
+  );
+
+  const beratBadan = toNumberOrNull(
+    firstDefined(
+      readAnthroValue(data.beratBadan),
+      data.beratBadanNilai,
+      readAnthroValue(antropometriData.beratBadan),
+      antropometriData.beratBadanNilai,
+      data.beratBadanKg
+    )
+  );
+  const zScoreBb = toNumberOrNull(
+    firstDefined(
+      readAnthroScore(data.zScoreBb),
+      readAnthroScore(data.beratBadan),
+      readAnthroScore(antropometriData.zScoreBb),
+      readAnthroScore(antropometriData.beratBadan),
+      data.zScoreBerat
+    )
+  );
+  const statusBb = toTextOr(
+    firstDefined(
+      readAnthroStatus(data.statusBb),
+      readAnthroStatus(data.beratBadan),
+      readAnthroStatus(antropometriData.statusBb),
+      readAnthroStatus(antropometriData.beratBadan),
+      data.statusBerat
+    )
+  );
+
+  const kondisiSanitasi = toTextOr(
+    firstDefined(
+      readTextValue(data.kondisiSanitasi),
+      readTextValue(lingkunganData.kondisiSanitasi),
+      readTextValue(lingkunganData.sanitasi),
+      readTextValue(data.sanitasi),
+      readTextValue(keluargaData.kondisiSanitasi),
+      readTextValue(keluargaData.sanitasi)
+    )
+  );
+  const sumberAir = toTextOr(
+    firstDefined(
+      readTextValue(data.sumberAir),
+      readTextValue(lingkunganData.sumberAir),
+      readTextValue(lingkunganData.air),
+      readTextValue(data.air),
+      readTextValue(keluargaData.sumberAir)
+    )
+  );
+  const statusSosialEkonomi = toTextOr(
+    firstDefined(
+      readTextValue(data.statusSosialEkonomi),
+      readTextValue(data.kategoriKeluarga),
+      readTextValue(keluargaData.statusSosialEkonomi),
+      readTextValue(keluargaData.kategoriKeluarga),
+      readTextValue(lingkunganData.statusSosialEkonomi),
+      readTextValue(lingkunganData.kategoriKeluarga)
+    )
+  );
+  const dusun = toTextOr(
+    firstDefined(
+      readNestedPrimitive(data.dusun, ["nama"]),
+      data.namaDusun,
+      typeof data.dusun === "string" ? data.dusun : undefined,
+      readNestedPrimitive(keluargaData.dusun, ["nama"]),
+      typeof keluargaData.dusun === "string" ? keluargaData.dusun : undefined,
+      readNestedPrimitive(lingkunganData.dusun, ["nama"]),
+      lingkunganData.dusun,
+      meta.dusun
+    )
+  );
 
   return {
     id: data.id ?? meta.id,
@@ -126,34 +430,61 @@ function mapHasil(data = {}, meta = {}) {
     balita: {
       nama,
       nik,
-      jenisKelamin:
-        data.jenisKelamin || data.balita?.jenisKelamin || meta.jenisKelamin || "-",
+      jenisKelamin,
       usiaBulan: usia,
     },
     tinggiBadan: {
-      nilai: toNumberOrNull(data.tinggiBadan ?? data.tinggiBadanCm),
-      zScore: toNumberOrNull(data.zScoreTb ?? data.zScoreTinggi),
-      status: data.statusTb || data.statusTinggi || "-",
+      nilai: tinggiBadan,
+      zScore: zScoreTb,
+      status: statusTb,
     },
     beratBadan: {
-      nilai: toNumberOrNull(data.beratBadan ?? data.beratBadanKg),
-      zScore: toNumberOrNull(data.zScoreBb ?? data.zScoreBerat),
-      status: data.statusBb || data.statusBerat || "-",
+      nilai: beratBadan,
+      zScore: zScoreBb,
+      status: statusBb,
     },
     lingkungan: {
-      dusun:
-        data.dusun?.nama ||
-        data.namaDusun ||
-        (typeof data.dusun === "string" ? data.dusun : meta.dusun) ||
-        "-",
-      rtRw: `${data.rt || meta.rt || "-"} / ${
-        data.dusun?.rw || data.rw || meta.rw || "-"
-      }`,
-      noKk: data.noKk || "-",
-      kepalaKeluarga: data.kepalaKeluarga || meta.kepalaKeluarga || "-",
-      namaIbu: data.namaIbu || meta.namaIbu || "-",
-      jamban: data.kondisiSanitasi || data.sanitasi || "-",
-      sumberAir: data.sumberAir || "-",
+      dusun,
+      rt: toTextOr(
+        firstDefined(data.rt, meta.rt, balitaData.rt, lingkunganData.rt)
+      ),
+      rw: toTextOr(
+        firstDefined(
+          readNestedPrimitive(data.dusun, ["rw"]),
+          data.rw,
+          data.wilayah,
+          keluargaData.rw,
+          lingkunganData.rw,
+          meta.rw
+        )
+      ),
+      rtRw: `${toTextOr(
+        firstDefined(data.rt, meta.rt, balitaData.rt, lingkunganData.rt)
+      )} / ${toTextOr(
+        firstDefined(
+          readNestedPrimitive(data.dusun, ["rw"]),
+          data.rw,
+          data.wilayah,
+          keluargaData.rw,
+          lingkunganData.rw,
+          meta.rw
+        )
+      )}`,
+      noKk: toTextOr(firstDefined(data.noKk, keluargaData.noKk)),
+      kepalaKeluarga: toTextOr(
+        firstDefined(
+          data.kepalaKeluarga,
+          keluargaData.kepalaKeluarga,
+          meta.kepalaKeluarga
+        )
+      ),
+      namaIbu: toTextOr(
+        firstDefined(data.namaIbu, keluargaData.namaIbu, meta.namaIbu)
+      ),
+      jamban: kondisiSanitasi,
+      kondisiSanitasi,
+      sumberAir,
+      statusSosialEkonomi,
     },
     intervensi: ambilDaftarIntervensi(data),
   };
@@ -273,6 +604,10 @@ export default function HasilPrediksi() {
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [isReclassifying, setIsReclassifying] = useState(false);
+
+  const theme = HASIL_THEME[hasil?.status] || HASIL_THEME.Tinggi;
+  const tbTone = resolveAntropometriTone(hasil?.tinggiBadan?.status);
+  const bbTone = resolveAntropometriTone(hasil?.beratBadan?.status);
 
   const muatDaftarPrioritas = useCallback(async () => {
     try {
@@ -609,16 +944,22 @@ export default function HasilPrediksi() {
           </section>
 
           {/* Hasil klasifikasi */}
-          <section className="rounded-2xl border border-red-100 bg-gradient-to-r from-red-50 via-white to-amber-50 p-6 shadow-sm">
+          <section
+            className={`rounded-2xl p-6 shadow-sm ${theme.banner}`}
+          >
             <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
               <div className="max-w-2xl">
                 <div className="flex flex-wrap items-center gap-3">
-                  <span className="inline-flex items-center gap-2 rounded-full bg-red-600 px-4 py-1.5 text-xs font-bold uppercase tracking-wide text-white">
+                  <span
+                    className={`inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-bold uppercase tracking-wide ${theme.pill}`}
+                  >
                     <span className="h-2 w-2 rounded-full bg-white" />
-                    Risiko {hasil.status} (Stunting)
+                    {theme.pillLabel}
                   </span>
-                  <span className="rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-red-700 ring-1 ring-red-200">
-                    Status Prioritas Intervensi {hasil.prioritas ?? "-"}
+                  <span
+                    className={`rounded-full px-3 py-1 text-xs font-semibold ${theme.priority}`}
+                  >
+                    {theme.priorityLabel}
                   </span>
                 </div>
                 <h2 className="mt-4 text-2xl font-bold text-slate-900">
@@ -627,12 +968,18 @@ export default function HasilPrediksi() {
                 <p className="mt-2 text-sm text-slate-600">{hasil.deskripsi}</p>
               </div>
 
-              <div className="flex items-center gap-4 rounded-2xl border border-red-100 bg-white px-5 py-4 shadow-sm">
-                <div className="rounded-xl bg-red-50 px-3 py-2 text-center">
-                  <p className="text-2xl font-bold text-red-600">
+              <div
+                className={`flex items-center gap-4 rounded-2xl px-5 py-4 shadow-sm ${theme.confidenceOuter}`}
+              >
+                <div
+                  className={`rounded-xl px-3 py-2 text-center ${theme.confidenceBox}`}
+                >
+                  <p className={`text-2xl font-bold ${theme.confidenceValue}`}>
                     {hasil.keyakinan !== null ? `${hasil.keyakinan}%` : "-"}
                   </p>
-                  <p className="text-[10px] font-bold uppercase text-red-500">
+                  <p
+                    className={`text-[10px] font-bold uppercase ${theme.confidenceLabel}`}
+                  >
                     {hasil.status}
                   </p>
                 </div>
@@ -644,7 +991,7 @@ export default function HasilPrediksi() {
                     Keyakinan Model:{" "}
                     {hasil.keyakinan !== null ? `${hasil.keyakinan}%` : "-"}
                   </p>
-                  <p className="text-xs font-semibold text-red-600">
+                  <p className={`text-xs font-semibold ${theme.confidenceNote}`}>
                     Ambang Kritis &gt;{" "}
                     {hasil.ambangKritis !== null ? `${hasil.ambangKritis}%` : "-"}
                   </p>
@@ -652,9 +999,11 @@ export default function HasilPrediksi() {
               </div>
             </div>
 
-            <div className="mt-6 flex flex-col gap-4 border-t border-red-100 pt-5 md:flex-row md:items-center md:justify-between">
+            <div
+              className={`mt-6 flex flex-col gap-4 border-t pt-5 md:flex-row md:items-center md:justify-between ${theme.divider}`}
+            >
               <p className="flex items-center gap-2 text-xs text-slate-500">
-                <CircleCheck className="h-4 w-4 text-teal-700" />
+                <CircleCheck className={`h-4 w-4 ${theme.footerIcon}`} />
                 Data klasifikasi terverifikasi sistem dan siap digunakan operasional desa.
               </p>
               <div className="flex flex-wrap gap-3">
@@ -728,12 +1077,14 @@ export default function HasilPrediksi() {
                 label="Tinggi Badan (TB)"
                 icon={MoveVertical}
                 accent={{
-                  border: "border-red-300",
-                  bar: "bg-red-500",
-                  icon: "bg-red-50 text-red-600",
+                  border: tbTone.border,
+                  bar: tbTone.bar,
+                  icon: tbTone.icon,
                 }}
                 footer={
-                  <span className="inline-block rounded-md bg-red-50 px-2 py-1 text-xs font-bold text-red-700">
+                  <span
+                    className={`inline-block rounded-md px-2 py-1 text-xs font-bold ${tbTone.badge}`}
+                  >
                     Status: {hasil.tinggiBadan.status}
                   </span>
                 }
@@ -742,7 +1093,7 @@ export default function HasilPrediksi() {
                   {hasil.tinggiBadan.nilai !== null ? hasil.tinggiBadan.nilai : "-"}{" "}
                   <span className="text-sm font-medium text-slate-500">cm</span>
                 </p>
-                <p className="mt-1 text-xs font-semibold text-red-600">
+                <p className={`mt-1 text-xs font-semibold ${tbTone.zScore}`}>
                   Z-score:{" "}
                   {hasil.tinggiBadan.zScore !== null
                     ? String(hasil.tinggiBadan.zScore).replace("-", "−")
@@ -755,12 +1106,14 @@ export default function HasilPrediksi() {
                 label="Berat Badan (BB)"
                 icon={Hourglass}
                 accent={{
-                  border: "border-amber-300",
-                  bar: "bg-amber-500",
-                  icon: "bg-amber-50 text-amber-600",
+                  border: bbTone.border,
+                  bar: bbTone.bar,
+                  icon: bbTone.icon,
                 }}
                 footer={
-                  <span className="inline-block rounded-md bg-amber-50 px-2 py-1 text-xs font-bold text-amber-700">
+                  <span
+                    className={`inline-block rounded-md px-2 py-1 text-xs font-bold ${bbTone.badge}`}
+                  >
                     Status: {hasil.beratBadan.status}
                   </span>
                 }
@@ -769,7 +1122,7 @@ export default function HasilPrediksi() {
                   {hasil.beratBadan.nilai !== null ? hasil.beratBadan.nilai : "-"}{" "}
                   <span className="text-sm font-medium text-slate-500">kg</span>
                 </p>
-                <p className="mt-1 text-xs font-semibold text-amber-700">
+                <p className={`mt-1 text-xs font-semibold ${bbTone.zScore}`}>
                   Z-score:{" "}
                   {hasil.beratBadan.zScore !== null
                     ? String(hasil.beratBadan.zScore).replace("-", "−")
@@ -786,7 +1139,7 @@ export default function HasilPrediksi() {
                   <ul className="space-y-1 text-xs font-semibold">
                     <li className="flex items-center gap-2 text-teal-700">
                       <Users className="h-3.5 w-3.5" />
-                      {hasil.lingkungan.jamban}
+                      {hasil.lingkungan.kondisiSanitasi}
                     </li>
                     <li className="flex items-center gap-2 text-amber-700">
                       <Droplet className="h-3.5 w-3.5" />
@@ -799,7 +1152,11 @@ export default function HasilPrediksi() {
                   {hasil.lingkungan.dusun}
                 </p>
                 <p className="mt-1 text-xs text-slate-500">
-                  {hasil.lingkungan.rtRw} (Kel. {hasil.lingkungan.kepalaKeluarga})
+                  {hasil.lingkungan.rtRw} (Kat:{" "}
+                  {hasil.lingkungan.statusSosialEkonomi})
+                </p>
+                <p className="mt-0.5 text-[11px] text-slate-400">
+                  Kel. {hasil.lingkungan.kepalaKeluarga}
                 </p>
               </ParamCard>
             </div>

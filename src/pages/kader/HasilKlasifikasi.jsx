@@ -31,38 +31,246 @@ import {
 import { api } from "../../services/api";
 
 /* Class lengkap ditulis eksplisit agar terdeteksi Tailwind v4 */
+const isObjectValue = (value) =>
+  value !== null && typeof value === "object" && !Array.isArray(value);
+
+const readNestedPrimitive = (value, keys) => {
+  if (value === null || value === undefined) return undefined;
+  if (!isObjectValue(value)) return value;
+
+  for (const key of keys) {
+    const nested = value[key];
+    if (
+      nested !== undefined &&
+      nested !== null &&
+      !isObjectValue(nested) &&
+      String(nested).trim() !== ""
+    ) {
+      return nested;
+    }
+  }
+
+  return undefined;
+};
+
+const readAnthroValue = (value) =>
+  readNestedPrimitive(value, [
+    "nilai",
+    "value",
+    "angka",
+    "tinggiBadan",
+    "beratBadan",
+  ]);
+
+const readAnthroScore = (value) =>
+  readNestedPrimitive(value, [
+    "zScore",
+    "zscore",
+    "z_score",
+    "score",
+    "nilaiZ",
+  ]);
+
+const readAnthroStatus = (value) =>
+  readNestedPrimitive(value, ["status", "label", "kategori"]);
+
+const readTextValue = (value) =>
+  readNestedPrimitive(value, [
+    "label",
+    "value",
+    "nilai",
+    "status",
+    "kategori",
+    "text",
+    "nama",
+  ]);
+
+const toTextOr = (value, fallback = "-") => {
+  if (isObjectValue(value)) return fallback;
+  if (value === null || value === undefined) return fallback;
+  const text = String(value).trim();
+  return text || fallback;
+};
+
+const firstDefined = (...values) =>
+  values.find(
+    (value) =>
+      value !== undefined && value !== null && String(value).trim() !== ""
+  );
+
+function mapHasilKlasifikasi(data = {}) {
+  const balitaData =
+    data.balita && typeof data.balita === "object" ? data.balita : {};
+  const antropometriData =
+    data.antropometri && typeof data.antropometri === "object"
+      ? data.antropometri
+      : {};
+  const lingkunganData =
+    data.lingkungan && typeof data.lingkungan === "object"
+      ? data.lingkungan
+      : {};
+  const keluargaData =
+    data.keluarga && typeof data.keluarga === "object" ? data.keluarga : {};
+
+  return {
+    ...data,
+    namaBalita: firstDefined(
+      data.namaBalita,
+      balitaData.nama,
+      typeof data.balita === "string" ? data.balita : undefined
+    ),
+    nikBalita: firstDefined(data.nikBalita, balitaData.nik),
+    jenisKelamin: firstDefined(data.jenisKelamin, balitaData.jenisKelamin),
+    usiaBulan: firstDefined(
+      data.usiaBulan,
+      data.usia,
+      balitaData.usiaBulan
+    ),
+    tinggiBadan: firstDefined(
+      readAnthroValue(data.tinggiBadan),
+      data.tinggiBadanNilai,
+      readAnthroValue(antropometriData.tinggiBadan),
+      antropometriData.tinggiBadanNilai,
+      data.tinggiBadanCm
+    ),
+    zScoreTb: firstDefined(
+      readAnthroScore(data.zScoreTb),
+      readAnthroScore(data.tinggiBadan),
+      readAnthroScore(antropometriData.zScoreTb),
+      readAnthroScore(antropometriData.tinggiBadan),
+      data.zScoreTinggi
+    ),
+    statusTb: toTextOr(
+      firstDefined(
+        readAnthroStatus(data.statusTb),
+        readAnthroStatus(data.tinggiBadan),
+        readAnthroStatus(antropometriData.statusTb),
+        readAnthroStatus(antropometriData.tinggiBadan),
+        data.statusTinggi
+      )
+    ),
+    beratBadan: firstDefined(
+      readAnthroValue(data.beratBadan),
+      data.beratBadanNilai,
+      readAnthroValue(antropometriData.beratBadan),
+      antropometriData.beratBadanNilai,
+      data.beratBadanKg
+    ),
+    zScoreBb: firstDefined(
+      readAnthroScore(data.zScoreBb),
+      readAnthroScore(data.beratBadan),
+      readAnthroScore(antropometriData.zScoreBb),
+      readAnthroScore(antropometriData.beratBadan),
+      data.zScoreBerat
+    ),
+    statusBb: toTextOr(
+      firstDefined(
+        readAnthroStatus(data.statusBb),
+        readAnthroStatus(data.beratBadan),
+        readAnthroStatus(antropometriData.statusBb),
+        readAnthroStatus(antropometriData.beratBadan),
+        data.statusBerat
+      )
+    ),
+    kondisiSanitasi: toTextOr(
+      firstDefined(
+        readTextValue(data.kondisiSanitasi),
+        readTextValue(lingkunganData.kondisiSanitasi),
+        readTextValue(lingkunganData.sanitasi),
+        readTextValue(data.sanitasi),
+        readTextValue(keluargaData.kondisiSanitasi),
+        readTextValue(keluargaData.sanitasi)
+      )
+    ),
+    sumberAir: toTextOr(
+      firstDefined(
+        readTextValue(data.sumberAir),
+        readTextValue(lingkunganData.sumberAir),
+        readTextValue(lingkunganData.air),
+        readTextValue(data.air),
+        readTextValue(keluargaData.sumberAir)
+      )
+    ),
+    statusSosialEkonomi: toTextOr(
+      firstDefined(
+        readTextValue(data.statusSosialEkonomi),
+        readTextValue(data.kategoriKeluarga),
+        readTextValue(keluargaData.statusSosialEkonomi),
+        readTextValue(keluargaData.kategoriKeluarga),
+        readTextValue(lingkunganData.statusSosialEkonomi),
+        readTextValue(lingkunganData.kategoriKeluarga)
+      )
+    ),
+    rt: toTextOr(
+      firstDefined(data.rt, balitaData.rt, keluargaData.rt, lingkunganData.rt)
+    ),
+    rw: toTextOr(
+      firstDefined(
+        readNestedPrimitive(data.dusun, ["rw"]),
+        data.rw,
+        data.wilayah,
+        keluargaData.rw,
+        lingkunganData.rw
+      )
+    ),
+    dusunNama: toTextOr(
+      firstDefined(
+        readNestedPrimitive(data.dusun, ["nama"]),
+        data.namaDusun,
+        typeof data.dusun === "string" ? data.dusun : undefined,
+        readNestedPrimitive(keluargaData.dusun, ["nama"]),
+        typeof keluargaData.dusun === "string" ? keluargaData.dusun : undefined,
+        readNestedPrimitive(lingkunganData.dusun, ["nama"]),
+        lingkunganData.dusun
+      )
+    ),
+  };
+}
+
 const STATUS_STYLE = {
   tinggi: {
-    title: "RISIKO TINGGI",
-    banner: "border-red-200 bg-red-50",
+    title: "RISIKO TINGGI (STUNTING)",
+    banner:
+      "border-red-100 border-t-4 border-t-red-500 bg-gradient-to-r from-red-50 via-white to-amber-50",
     text: "text-red-700",
     icon: "bg-red-600 text-white",
     chip: "border-red-300 text-red-700",
-    chipLabel: "Perlu Intervensi Prioritas 1",
+    chipLabel: "Status Prioritas Intervensi 1",
     dot: "bg-red-600",
     bar: "bg-red-600",
   },
   sedang: {
     title: "RISIKO SEDANG",
-    banner: "border-amber-200 bg-amber-50",
+    banner:
+      "border-amber-100 border-t-4 border-t-amber-500 bg-gradient-to-r from-amber-50 via-white to-yellow-50",
     text: "text-amber-700",
     icon: "bg-amber-500 text-white",
     chip: "border-amber-300 text-amber-700",
-    chipLabel: "Perlu Pemantauan Berkala & Konseling",
+    chipLabel: "Status Prioritas Intervensi 2",
     dot: "bg-amber-500",
     bar: "bg-amber-500",
   },
   rendah: {
-    title: "RISIKO RENDAH",
-    banner: "border-emerald-200 bg-emerald-50",
+    title: "RISIKO RENDAH (AMAN)",
+    banner:
+      "border-emerald-100 border-t-4 border-t-emerald-500 bg-gradient-to-r from-emerald-50 via-white to-teal-50",
     text: "text-emerald-700",
-    icon: "bg-[#1B8A5A] text-white",
+    icon: "bg-emerald-600 text-white",
     chip: "border-emerald-300 text-emerald-700",
-    chipLabel: "Kondisi Terpantau Baik & Sehat",
-    dot: "bg-[#1B8A5A]",
-    bar: "bg-[#1B8A5A]",
+    chipLabel: "Pemantauan Rutin (Prioritas 3)",
+    dot: "bg-emerald-600",
+    bar: "bg-emerald-500",
   },
 };
+
+function normalizeStatusKey(value) {
+  const raw = String(value || "").toLowerCase();
+  if (raw.includes("rendah") || raw.includes("aman") || raw.includes("hijau")) {
+    return "rendah";
+  }
+  if (raw.includes("sedang") || raw.includes("kuning")) return "sedang";
+  return "tinggi";
+}
 
 function resolveFaktorVisual(item) {
   const lbl = String(item.label || "").toLowerCase();
@@ -233,26 +441,30 @@ export default function HasilKlasifikasi() {
     );
   }
 
-  const currentHasil = hasil;
-  const statusKey = String(
+  const currentHasil = mapHasilKlasifikasi(hasil);
+  const statusKey = normalizeStatusKey(
     currentHasil.status || currentHasil.statusRisiko || "rendah"
-  ).toLowerCase();
+  );
   const s = STATUS_STYLE[statusKey] || STATUS_STYLE.tinggi;
   const formattedFaktor = Array.isArray(currentHasil.faktor)
     ? currentHasil.faktor.map(resolveFaktorVisual)
     : [];
 
   // Nama & Identitas Turunan
-  const noKk = currentHasil.noKk || "-";
-  const kepalaKeluarga =
-    currentHasil.kepalaKeluarga || currentHasil.kepala || "-";
-  const namaIbu = currentHasil.namaIbu || "-";
-  const namaBalita = currentHasil.namaBalita || currentHasil.balita || "-";
-  const jenisKelamin = currentHasil.jenisKelamin || "-";
-  const usiaBulan = currentHasil.usiaBulan ?? "-";
+  const noKk = toTextOr(currentHasil.noKk);
+  const kepalaKeluarga = toTextOr(
+    firstDefined(currentHasil.kepalaKeluarga, currentHasil.kepala)
+  );
+  const namaIbu = toTextOr(currentHasil.namaIbu);
+  const namaBalita = toTextOr(currentHasil.namaBalita);
+  const jenisKelamin = toTextOr(currentHasil.jenisKelamin);
+  const usiaBulan = toTextOr(currentHasil.usiaBulan);
   const dusunInfo =
-    currentHasil.dusun?.nama ||
-    (currentHasil.rw ? `Wilayah ${currentHasil.rw}` : "Desa Sukamaju");
+    currentHasil.dusunNama && currentHasil.dusunNama !== "-"
+      ? currentHasil.dusunNama
+      : currentHasil.rw && currentHasil.rw !== "-"
+        ? `Wilayah ${currentHasil.rw}`
+        : "Desa Sukamaju";
 
   return (
     <div className="space-y-5">
@@ -394,8 +606,13 @@ export default function HasilKlasifikasi() {
               Wilayah Administrasi
             </span>
             <p className="mt-1 text-sm font-bold text-[#0F2942]">
-              {dusunInfo} {currentHasil.rt ? `(${currentHasil.rt})` : ""}
+              {dusunInfo}
             </p>
+            {(currentHasil.rt !== "-" || currentHasil.rw !== "-") && (
+              <p className="mt-0.5 text-xs text-slate-500">
+                RT/RW: {currentHasil.rt} / {currentHasil.rw}
+              </p>
+            )}
           </div>
         </div>
       </section>

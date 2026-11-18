@@ -71,8 +71,11 @@ const INITIAL_FORM = {
   kepalaKeluarga: "",
   namaIbu: "",
   namaBalita: "",
+  nikBalita: "",
   jenisKelamin: "Laki-laki",
   usia: "",
+  tinggiBadan: "",
+  beratBadan: "",
 
   // Bagian 2 — Faktor Sosio-Ekonomi & Lingkungan (8 Fitur Random Forest)
   statusSosialEkonomi: "",
@@ -254,6 +257,10 @@ export default function InputDataKeluarga() {
       next.namaBalita = "Nama balita wajib diisi.";
     }
 
+    if (form.nikBalita.trim() && !/^\d{16}$/.test(form.nikBalita.trim())) {
+      next.nikBalita = "NIK balita harus terdiri dari 16 digit angka.";
+    }
+
     if (!form.jenisKelamin) {
       next.jenisKelamin = "Pilih jenis kelamin balita.";
     }
@@ -262,6 +269,24 @@ export default function InputDataKeluarga() {
       next.usia = "Isi usia balita dalam bulan.";
     } else if (Number(form.usia) < 0 || Number(form.usia) > 59) {
       next.usia = "Usia balita harus antara 0 sampai 59 bulan.";
+    }
+
+    if (form.tinggiBadan === "") {
+      next.tinggiBadan = "Tinggi / panjang badan balita wajib diisi.";
+    } else if (
+      !Number.isFinite(Number(form.tinggiBadan)) ||
+      Number(form.tinggiBadan) <= 0
+    ) {
+      next.tinggiBadan = "Tinggi / panjang badan balita harus berupa angka positif.";
+    }
+
+    if (form.beratBadan === "") {
+      next.beratBadan = "Berat badan balita wajib diisi.";
+    } else if (
+      !Number.isFinite(Number(form.beratBadan)) ||
+      Number(form.beratBadan) <= 0
+    ) {
+      next.beratBadan = "Berat badan balita harus berupa angka positif.";
     }
 
     // 2. Validasi Bagian 2 — 8 Fitur Model Random Forest
@@ -340,8 +365,11 @@ export default function InputDataKeluarga() {
         kepalaKeluarga: form.kepalaKeluarga.trim(),
         namaIbu: form.namaIbu.trim(),
         namaBalita: form.namaBalita.trim(),
+        nikBalita: form.nikBalita.trim() || null,
         jenisKelamin: form.jenisKelamin,
         usia: Number(form.usia),
+        tinggiBadan: Number(form.tinggiBadan),
+        beratBadan: Number(form.beratBadan),
 
         // Bagian 2: 8 Fitur Model Jurnal (Random Forest)
         statusSosialEkonomi: form.statusSosialEkonomi,
@@ -604,6 +632,29 @@ export default function InputDataKeluarga() {
             </Field>
 
             <Field
+              id="nikBalita"
+              label="NIK Balita"
+              hint="Opsional. Format 16 digit angka sesuai dokumen identitas balita."
+              error={errors.nikBalita}
+              required={false}
+            >
+              <div className="relative">
+                <CreditCard className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  id="nikBalita"
+                  name="nikBalita"
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={16}
+                  placeholder="3204128492040002"
+                  value={form.nikBalita}
+                  onChange={handleNumericOnly("nikBalita", 16)}
+                  className={`${inputClass(!!errors.nikBalita)} tracking-wider font-mono`}
+                />
+              </div>
+            </Field>
+
+            <Field
               id="jenisKelamin"
               label="Jenis Kelamin Balita"
               hint="Pilih jenis kelamin untuk standar antropometri pertumbuhan."
@@ -630,6 +681,58 @@ export default function InputDataKeluarga() {
                     <span>{jk}</span>
                   </label>
                 ))}
+              </div>
+            </Field>
+
+            <Field
+              id="tinggiBadan"
+              label="Tinggi / Panjang Badan Balita (cm)"
+              hint="Hasil pengukuran antropometri balita saat ini."
+              error={errors.tinggiBadan}
+            >
+              <div className="relative">
+                <Ruler className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  id="tinggiBadan"
+                  name="tinggiBadan"
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  inputMode="decimal"
+                  placeholder="82.5"
+                  value={form.tinggiBadan}
+                  onChange={handleChange}
+                  className={`${inputClass(!!errors.tinggiBadan)} pr-14`}
+                />
+                <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-xs text-slate-400">
+                  cm
+                </span>
+              </div>
+            </Field>
+
+            <Field
+              id="beratBadan"
+              label="Berat Badan Balita (kg)"
+              hint="Hasil penimbangan balita saat ini."
+              error={errors.beratBadan}
+            >
+              <div className="relative">
+                <Scale className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  id="beratBadan"
+                  name="beratBadan"
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  inputMode="decimal"
+                  placeholder="11.2"
+                  value={form.beratBadan}
+                  onChange={handleChange}
+                  className={`${inputClass(!!errors.beratBadan)} pr-14`}
+                />
+                <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-xs text-slate-400">
+                  kg
+                </span>
               </div>
             </Field>
 
