@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { LayoutGrid, LineChart, Table2, UsersRound } from "lucide-react";
+import { LayoutGrid, LineChart, MapPin, Table2, UsersRound } from "lucide-react";
 import DashboardLayout from "./DashboardLayout";
 import { getUser } from "../services/api";
 
@@ -27,6 +27,12 @@ const NAV_ITEMS = [
     label: "Kelola Pengguna",
     short: "Pengguna",
     icon: UsersRound,
+  },
+  {
+    to: "/admin/kelola-dusun",
+    label: "Kelola Dusun & Penugasan",
+    short: "Dusun",
+    icon: MapPin,
   },
 ];
 

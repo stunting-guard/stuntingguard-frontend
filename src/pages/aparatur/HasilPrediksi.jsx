@@ -1,6 +1,6 @@
 // src/pages/aparatur/HasilPrediksi.jsx
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   Printer,
   RotateCw,
@@ -140,9 +140,53 @@ function ParamCard({ label, icon: Icon, accent, children, footer }) {
 export default function HasilPrediksi() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
 
-  const [hasil, setHasil] = useState(DEFAULT_HASIL);
-  const [isLoading, setIsLoading] = useState(true);
+  const [hasil, setHasil] = useState(() => {
+    if (location.state?.hasil) {
+      const h = location.state.hasil;
+      return {
+        id: h.id || 0,
+        status: h.statusRisiko === "TINGGI" ? "Tinggi" : h.statusRisiko === "SEDANG" ? "Sedang" : "Rendah",
+        statusRisiko: h.statusRisiko,
+        judul: h.statusRisiko === "TINGGI" ? "Balita Terindikasi Berisiko Tinggi Stunting" : "Hasil Evaluasi Klasifikasi Risiko",
+        deskripsi: h.rekomendasi?.teks || "Hasil analisis model prediktif berbasis faktor sosio-ekonomi dan lingkungan.",
+        prioritas: h.prioritas === "Prioritas 1" ? 1 : 2,
+        keyakinan: Math.round(h.keyakinan || 85),
+        ambangKritis: Math.round(h.ambangKritis || 70),
+        balita: {
+          nama: h.namaBalita || "Ananda",
+          nik: h.nikBalita || "-",
+          jenisKelamin: h.jenisKelamin || "Laki-laki",
+          usiaBulan: h.usiaBulan || 0,
+        },
+        tinggiBadan: {
+          nilai: h.tinggiBadan !== null && h.tinggiBadan !== undefined ? Number(h.tinggiBadan) : 80.0,
+          zScore: h.zScoreTb !== null && h.zScoreTb !== undefined ? Number(h.zScoreTb) : -2.1,
+          status: h.statusTb || (h.statusRisiko === "TINGGI" ? "Di Bawah Standar (Pendek)" : "Normal"),
+        },
+        beratBadan: {
+          nilai: h.beratBadan !== null && h.beratBadan !== undefined ? Number(h.beratBadan) : 9.5,
+          zScore: h.zScoreBb !== null && h.zScoreBb !== undefined ? Number(h.zScoreBb) : -1.5,
+          status: h.statusBb || (h.statusRisiko === "TINGGI" ? "Kurang" : "Normal"),
+        },
+        lingkungan: {
+          dusun: h.dusun?.nama || "Dusun Melati",
+          rtRw: `${h.rt || "RT 01"} / ${h.dusun?.rw || "RW 01"}`,
+          noKk: h.noKk || "-",
+          kepalaKeluarga: h.kepalaKeluarga || "-",
+          namaIbu: h.namaIbu || "-",
+          jamban: h.kondisiSanitasi || "-",
+          sumberAir: h.sumberAir || "-",
+        },
+        intervensi: Array.isArray(h.rekomendasi?.intervensi)
+          ? h.rekomendasi.intervensi.map(resolveIntervensiVisual)
+          : DEFAULT_HASIL.intervensi,
+      };
+    }
+    return DEFAULT_HASIL;
+  });
+  const [isLoading, setIsLoading] = useState(!location.state?.hasil);
   const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
@@ -180,8 +224,8 @@ export default function HasilPrediksi() {
           }
         }
 
-        // Fallback default
-        if (isMounted) {
+        // Fallback default jika tidak ada targetId
+        if (isMounted && !location.state?.hasil) {
           setHasil(DEFAULT_HASIL);
         }
       } catch (err) {
@@ -189,7 +233,9 @@ export default function HasilPrediksi() {
         setErrorMessage(
           err?.data?.message || err?.message || "Gagal memuat detail data balita."
         );
-        setHasil(DEFAULT_HASIL);
+        if (!location.state?.hasil) {
+          setHasil(DEFAULT_HASIL);
+        }
       } finally {
         if (isMounted) setIsLoading(false);
       }
@@ -206,7 +252,7 @@ export default function HasilPrediksi() {
 
   const handlePrint = () => window.print();
   const handleInputBaru = () => {
-    navigate("/kader/input-data");
+    navigate("/aparatur/input-prediksi");
   };
 
   return (

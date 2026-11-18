@@ -14,6 +14,7 @@ import {
   Landmark,
   Loader2,
   Pencil,
+  Power,
   RotateCcw,
   ShieldCheck,
   Trash2,
@@ -384,6 +385,31 @@ export default function KelolaPengguna() {
     setResetState({ loading: false, password: "", copied: false });
   };
 
+  /* ------------------------- Aksi toggle status aktif/nonaktif ------------------------- */
+  const [togglingId, setTogglingId] = useState(null);
+
+  const handleToggleStatus = async (user) => {
+    setTogglingId(user.id);
+    try {
+      const nextActive = !user.isActive;
+      const res = await api.patch(`/admin/users/${user.id}/status`, {
+        isActive: nextActive,
+      });
+      if (res?.success) {
+        showToast(
+          `Akun ${user.nama || user.name} berhasil ${nextActive ? "diaktifkan" : "dinonaktifkan"}.`
+        );
+        fetchUsers();
+      } else {
+        showToast(res?.message || "Gagal mengubah status pengguna.");
+      }
+    } catch (err) {
+      showToast(err?.data?.message || err?.message || "Gagal mengubah status pengguna.");
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
   const eksekusiReset = async () => {
     if (!resetTarget) return;
     setResetState({ loading: true, password: "", copied: false });
@@ -460,13 +486,11 @@ export default function KelolaPengguna() {
             <div className="flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center gap-1.5 rounded-md bg-[#E7F5F0] px-2.5 py-1 text-[11px] font-semibold text-teal-800">
                 <CircleCheck className="h-3.5 w-3.5" aria-hidden="true" />
-                {ringkasan?.aktif ?? "—"} Akun Aktif
+                {ringkasan?.aktif ?? 0} Akun Aktif
               </span>
-              {ringkasan?.nonaktif > 0 && (
-                <span className="text-[11px] text-slate-500">
-                  {ringkasan.nonaktif} Nonaktif
-                </span>
-              )}
+              <span className="inline-flex items-center gap-1.5 rounded-md bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-600">
+                {ringkasan?.nonaktif ?? 0} Nonaktif
+              </span>
             </div>
           }
         />
@@ -623,7 +647,7 @@ export default function KelolaPengguna() {
                     title={statusFilter === "Nonaktif" ? "Tidak ada akun nonaktif" : "Tidak ada pengguna"}
                     description={
                       statusFilter === "Nonaktif"
-                        ? "Skema backend saat ini tidak menyimpan status nonaktif; akun yang dikembalikan berstatus Aktif."
+                        ? "Tidak ada akun pengguna yang sedang dinonaktifkan."
                         : "Tidak ada pengguna yang cocok dengan kriteria pencarian atau filter."
                     }
                   />
@@ -633,6 +657,7 @@ export default function KelolaPengguna() {
                     const roleMeta = ROLE_META[roleKey] || ROLE_META.Kader;
                     const RoleIcon = roleMeta.icon;
                     const tone = AVATAR_TONES[idx % AVATAR_TONES.length];
+                    const isUserActive = u.isActive !== false && u.status !== "Nonaktif" && u.status !== "NONAKTIF";
 
                     return (
                       <tr key={u.id} className="transition hover:bg-slate-50/60">
@@ -667,23 +692,40 @@ export default function KelolaPengguna() {
                         </td>
                         <td className="px-3 py-4 text-center">
                           <span
-                            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                              u.status === "Nonaktif"
-                                ? "bg-slate-100 text-slate-600"
-                                : "bg-teal-50 text-teal-800"
+                            className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10px] font-bold border ${
+                              isUserActive
+                                ? "border-teal-200/70 bg-[#E7F5F0] text-teal-800"
+                                : "border-slate-200 bg-slate-100 text-slate-600"
                             }`}
                           >
                             <span
                               className={`h-1.5 w-1.5 rounded-full ${
-                                u.status === "Nonaktif" ? "bg-slate-400" : "bg-teal-600"
+                                isUserActive ? "bg-teal-600" : "bg-slate-400"
                               }`}
                               aria-hidden="true"
                             />
-                            {u.status || "Aktif"}
+                            {isUserActive ? "Aktif" : "Nonaktif"}
                           </span>
                         </td>
                         <td className="px-5 py-4 text-right">
                           <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleToggleStatus(u)}
+                              disabled={togglingId === u.id}
+                              title={isUserActive ? "Nonaktifkan Akun Pengguna" : "Aktifkan Akun Pengguna"}
+                              className={`rounded-lg p-1.5 transition ${
+                                isUserActive
+                                  ? "text-teal-700 hover:bg-teal-50"
+                                  : "text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                              }`}
+                            >
+                              {togglingId === u.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin text-teal-700" />
+                              ) : (
+                                <Power className="h-4 w-4" />
+                              )}
+                            </button>
                             <button
                               type="button"
                               onClick={() => konfirmasiReset(u)}
