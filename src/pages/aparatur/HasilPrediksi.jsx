@@ -17,6 +17,7 @@ import {
   Flame,
   Loader2,
   AlertCircle,
+  Sparkles,
 } from "lucide-react";
 import { api } from "../../services/api";
 
@@ -250,9 +251,78 @@ export default function HasilPrediksi() {
 
   const { balita, tinggiBadan, beratBadan, lingkungan } = hasil;
 
+  const [isReclassifying, setIsReclassifying] = useState(false);
+  const [isBatchProcessing, setIsBatchProcessing] = useState(false);
+  const [reclassifySuccess, setReclassifySuccess] = useState(null);
+
   const handlePrint = () => window.print();
-  const handleInputBaru = () => {
-    navigate("/aparatur/input-prediksi");
+
+  const handleKlasifikasiUlang = async () => {
+    if (!hasil.id) return;
+    try {
+      setIsReclassifying(true);
+      setReclassifySuccess(null);
+      setErrorMessage(null);
+      const res = await api.post(`/aparatur/klasifikasi-ulang/${hasil.id}`);
+      if (res?.success && res?.data) {
+        setReclassifySuccess(
+          `Berhasil diklasifikasi ulang dengan Random Forest (${res.data.statusRisiko || res.data.status || "Tervalidasi"})!`
+        );
+        const resDetail = await api.get(`/aparatur/hasil-prediksi/${hasil.id}`).catch(() => null);
+        if (resDetail?.success && resDetail?.data) {
+          const mapped = {
+            ...resDetail.data,
+            intervensi: Array.isArray(resDetail.data.intervensi)
+              ? resDetail.data.intervensi.map(resolveIntervensiVisual)
+              : DEFAULT_HASIL.intervensi,
+          };
+          setHasil(mapped);
+        }
+      }
+    } catch (err) {
+      setErrorMessage(err?.data?.message || err?.message || "Gagal mengklasifikasi ulang.");
+    } finally {
+      setIsReclassifying(false);
+    }
+  };
+
+  const handleProsesUlangSemua = async () => {
+    if (!window.confirm("Jalankan pemrosesan ulang seluruh data skrining desa dengan model Random Forest terbaru?")) {
+      return;
+    }
+    try {
+      setIsBatchProcessing(true);
+      setReclassifySuccess(null);
+      setErrorMessage(null);
+      const res = await api.post("/aparatur/proses-prediksi", {});
+      if (res?.success) {
+        setReclassifySuccess(
+          `Berhasil memproses ulang ${res.data?.totalDiproses ?? 0} data skrining Posyandu menggunakan model Random Forest!`
+        );
+        if (hasil.id) {
+          const resDetail = await api.get(`/aparatur/hasil-prediksi/${hasil.id}`).catch(() => null);
+          if (resDetail?.success && resDetail?.data) {
+            const mapped = {
+              ...resDetail.data,
+              intervensi: Array.isArray(resDetail.data.intervensi)
+                ? resDetail.data.intervensi.map(resolveIntervensiVisual)
+                : DEFAULT_HASIL.intervensi,
+            };
+            setHasil(mapped);
+          }
+        }
+      } else {
+        setErrorMessage(res?.message || "Gagal memproses ulang data skrining.");
+      }
+    } catch (err) {
+      setErrorMessage(err?.data?.message || err?.message || "Terjadi kesalahan saat memproses data.");
+    } finally {
+      setIsBatchProcessing(false);
+    }
+  };
+
+  const handleLihatDataKeluarga = () => {
+    navigate("/aparatur/data-keluarga");
   };
 
   return (
@@ -279,6 +349,39 @@ export default function HasilPrediksi() {
         </div>
       </section>
 
+      {/* Informasi Sumber Data Posyandu se-Desa */}
+      <section className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-2xl border border-teal-200 bg-teal-50/80 p-4 shadow-sm text-xs text-teal-900">
+        <div className="flex items-start sm:items-center gap-3">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-teal-700 text-white">
+            <Users className="h-4 w-4" />
+          </span>
+          <div>
+            <p className="font-bold text-teal-950">Data Skrining Lapangan Kader Posyandu se-Desa</p>
+            <p className="mt-0.5 text-slate-600">
+              Data dikumpulkan oleh kader di setiap dusun dan dianalisis menggunakan mesin Random Forest terpusat.
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={handleProsesUlangSemua}
+          disabled={isBatchProcessing}
+          className="inline-flex items-center gap-2 rounded-xl bg-teal-800 px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-teal-900 disabled:opacity-60 shrink-0"
+        >
+          {isBatchProcessing ? (
+            <>
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Memproses Semua Data...
+            </>
+          ) : (
+            <>
+              <Sparkles className="h-3.5 w-3.5" />
+              Proses Ulang Semua Data Posyandu
+            </>
+          )}
+        </button>
+      </section>
+
       {errorMessage && (
         <div
           role="alert"
@@ -286,6 +389,16 @@ export default function HasilPrediksi() {
         >
           <AlertCircle className="h-4 w-4 shrink-0 text-amber-600" />
           <span>{errorMessage} (Menampilkan data acuan sistem)</span>
+        </div>
+      )}
+
+      {reclassifySuccess && (
+        <div
+          role="status"
+          className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-xs font-semibold text-emerald-800"
+        >
+          <CircleCheck className="h-4 w-4 shrink-0 text-emerald-600" />
+          <span>{reclassifySuccess}</span>
         </div>
       )}
 
@@ -341,11 +454,29 @@ export default function HasilPrediksi() {
             </button>
             <button
               type="button"
-              onClick={handleInputBaru}
-              className="inline-flex items-center gap-2 rounded-xl border border-teal-200 bg-white px-4 py-2.5 text-sm font-semibold text-teal-800 transition hover:bg-teal-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-700 focus-visible:ring-offset-2"
+              onClick={handleKlasifikasiUlang}
+              disabled={isReclassifying}
+              className="inline-flex items-center gap-2 rounded-xl border border-teal-200 bg-white px-4 py-2.5 text-sm font-semibold text-teal-800 transition hover:bg-teal-50 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-700 focus-visible:ring-offset-2"
             >
-              <RotateCw className="h-4 w-4" />
-              Input Prediksi Baru
+              {isReclassifying ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Mengklasifikasi Ulang...
+                </>
+              ) : (
+                <>
+                  <RotateCw className="h-4 w-4" />
+                  Klasifikasi Ulang Model RF
+                </>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={handleLihatDataKeluarga}
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2"
+            >
+              <Users className="h-4 w-4" />
+              Data Keluarga
             </button>
           </div>
         </div>

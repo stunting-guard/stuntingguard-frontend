@@ -137,7 +137,12 @@ const inputClass = (hasError) =>
 export default function InputDataKeluarga() {
   const navigate = useNavigate();
   const location = useLocation();
-  const isAparatur = location.pathname.startsWith("/aparatur") || getUser()?.role === "APARATUR";
+  const currentUser = getUser();
+  const isAparatur = location.pathname.startsWith("/aparatur") || currentUser?.role === "APARATUR";
+  const dusunKader = currentUser?.dusun;
+  const dusunInfoLabel = dusunKader
+    ? `${dusunKader.nama || "Dusun"} (${dusunKader.rw || "RW -"}) • ${dusunKader.posyandu || "Posyandu"}`
+    : "Dusun Melati (RW 01) • Posyandu Melati";
 
   const [form, setForm] = useState(INITIAL_FORM);
   const [errors, setErrors] = useState({});
@@ -188,7 +193,12 @@ export default function InputDataKeluarga() {
             );
           }
           if (suggestions.length > 0) {
-            setWilayahHints([...new Set(suggestions)]);
+            const uniqueHints = [...new Set(suggestions)];
+            setWilayahHints(uniqueHints);
+            setForm((prev) => ({
+              ...prev,
+              wilayah: prev.wilayah || uniqueHints[0],
+            }));
           }
         }
       } catch {
@@ -433,6 +443,15 @@ export default function InputDataKeluarga() {
         <p className="mt-1 text-sm text-slate-500">
           Isi data identitas keluarga, 8 faktor determinan sosio-ekonomi (acuan jurnal Atmadji &amp; Nugraha, 2025; Ayue et al., 2025), serta catatan Buku KIA untuk estimasi risiko stunting.
         </p>
+
+        {!isAparatur && (
+          <div className="mt-3.5 inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50/80 px-3.5 py-1.5 text-xs font-semibold text-emerald-800">
+            <MapPin className="h-4 w-4 text-emerald-600 shrink-0" />
+            <span>
+              Wilayah Penugasan: <strong>{dusunInfoLabel}</strong> (Terkunci Otomatis pada Akun Kader)
+            </span>
+          </div>
+        )}
       </div>
 
       {submitError && (

@@ -59,8 +59,8 @@ export default function App() {
             <Route path="dashboard" element={<DashboardAparatur />} />
             <Route path="data-keluarga" element={<DataKeluarga />} />
             <Route path="peta-wilayah" element={<PetaWilayah />} />
-            <Route path="input-prediksi" element={<InputDataKeluarga />} />
-            <Route path="input-data" element={<InputDataKeluarga />} />
+            <Route path="input-prediksi" element={<Navigate to="/aparatur/data-keluarga" replace />} />
+            <Route path="input-data" element={<Navigate to="/aparatur/data-keluarga" replace />} />
             <Route path="hasil-prediksi" element={<HasilPrediksi />} />
             <Route path="hasil-prediksi/:id" element={<HasilPrediksi />} />
             <Route path="laporan" element={<Laporan />} />

@@ -19,11 +19,12 @@ import { api } from "../../services/api";
 /* Fallback data                                                      */
 /* ------------------------------------------------------------------ */
 const DEFAULT_STATS = {
-  totalDataLatih: 12840,
-  akurasiTerakhir: 94.8,
-  penggunaTerdaftar: 5,
-  versiModel: "Random Forest Classifier v1.2",
-  pengguna: { total: 5, kader: 3, aparatur: 1, admin: 1 },
+  totalDataLatih: 372,
+  akurasiTerakhir: 79.6,
+  penggunaTerdaftar: 4,
+  versiModel: "Random Forest Classifier v2.0 (scikit-learn)",
+  algoritma: "Random Forest Classifier (scikit-learn)",
+  pengguna: { total: 4, kader: 2, aparatur: 1, admin: 1 },
 };
 
 const MODUL_UTAMA = [
@@ -106,6 +107,9 @@ export default function DashboardAdmin() {
             <h1 className="mt-3 text-[26px] font-extrabold leading-tight tracking-tight text-[#0F2942] sm:text-[32px]">
               Selamat Datang, Admin &amp; Peneliti
             </h1>
+            <p className="mt-1 text-xs text-slate-500">
+              Mesin Klasifikasi: <strong className="text-teal-800">{stats.versiModel}</strong> ({stats.algoritma || "scikit-learn RandomForestClassifier"})
+            </p>
           </div>
           {isLoading && (
             <span className="inline-flex items-center gap-1.5 text-xs text-slate-400">
@@ -119,8 +123,8 @@ export default function DashboardAdmin() {
       <section aria-label="Ringkasan data" className="grid gap-4 md:grid-cols-3 lg:gap-5">
         <StatCard
           label="Total Data Latih"
-          value={fmt.format(stats.totalDataLatih)}
-          caption="Baris Data"
+          value={fmt.format(stats.totalDataLatih || 372)}
+          caption="Baris Data Latih (MySQL + Referensi)"
           icon={<Table2 className="h-5 w-5" strokeWidth={1.8} aria-hidden="true" />}
           footerBorder
           footer={
@@ -129,17 +133,33 @@ export default function DashboardAdmin() {
                 <CircleCheck className="h-3.5 w-3.5" aria-hidden="true" />
                 Format Data Bersih
               </span>
-              <span className="text-[11px] text-slate-500">Sumber Posyandu Wilayah</span>
+              <span className="text-[11px] text-slate-500">
+                {stats.totalSkriningRiil !== undefined ? `${stats.totalSkriningRiil} Data Riil Desa` : "Sumber Posyandu Wilayah"}
+              </span>
             </div>
           }
         />
 
         <StatCard
           label="Akurasi Model Terakhir"
-          value={`${Number(stats.akurasiTerakhir || 94.8).toFixed(1)}%`}
+          value={`${Number(stats.akurasiTerakhir !== undefined ? stats.akurasiTerakhir : 79.6).toFixed(1)}%`}
           valueClassName="mt-4 text-4xl font-extrabold leading-none tracking-tight text-teal-800 sm:text-[40px]"
-          caption="Pengujian Data Uji"
+          caption="5-Fold Cross-Validation"
           icon={<ShieldCheck className="h-5 w-5" strokeWidth={1.8} aria-hidden="true" />}
+          footerBorder
+          footer={
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 rounded-md bg-[#E7F5F0] px-2.5 py-1 text-[11px] font-semibold text-teal-800">
+                <CircleCheck className="h-3.5 w-3.5" aria-hidden="true" />
+                {stats.versiModel || "Random Forest Classifier"}
+              </span>
+              {stats.waktuTraining && (
+                <span className="text-[11px] text-slate-500">
+                  {new Date(stats.waktuTraining).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}
+                </span>
+              )}
+            </div>
+          }
         />
 
         <StatCard

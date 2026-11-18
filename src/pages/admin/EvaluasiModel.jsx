@@ -576,10 +576,10 @@ export default function EvaluasiModel() {
 
             <dl className="mt-5 divide-y divide-slate-100 rounded-xl border border-slate-100 text-xs">
               {[
-                ["Pembagian data", "80% latih / 20% uji"],
-                ["Algoritma", "Random Forest Classifier"],
-                ["Validasi", "5-Fold Cross Validation"],
-                ["Status Service", "Python API Bridge / Local Model"],
+                ["Algoritma", algoritma || "Random Forest Classifier (scikit-learn)"],
+                ["Validasi", "5-Fold Stratified Cross-Validation"],
+                ["Total Data Latih", `${fmt.format(totalDataLatih)} baris data`],
+                ["Engine Machine Learning", "Python 3.13 / scikit-learn runtime"],
               ].map(([label, value]) => (
                 <div key={label} className="flex items-center justify-between gap-4 px-4 py-2.5">
                   <dt className="text-slate-500">{label}</dt>
@@ -587,6 +587,15 @@ export default function EvaluasiModel() {
                 </div>
               ))}
             </dl>
+
+            {isTraining && (
+              <div className="mt-4 rounded-xl border border-teal-200 bg-teal-50 p-3.5 text-xs text-teal-900 flex items-center gap-2.5 text-left">
+                <Loader2 className="h-4 w-4 animate-spin text-teal-700 shrink-0" />
+                <p>
+                  <strong>Proses Pelatihan Berjalan:</strong> Menjalankan Python scikit-learn RandomForestClassifier, kalkulasi 5-fold Cross-Validation, dan pembaruan berkas <code>model_rf.joblib</code>...
+                </p>
+              </div>
+            )}
 
             <div className="mt-6 grid gap-3 sm:grid-cols-2">
               <button
@@ -608,7 +617,7 @@ export default function EvaluasiModel() {
                 ) : (
                   <RotateCw className="h-4 w-4" aria-hidden="true" />
                 )}
-                {isTraining ? "Melatih model..." : "Mulai Latih Ulang"}
+                {isTraining ? "Melatih scikit-learn..." : "Mulai Latih Ulang"}
               </button>
             </div>
           </div>
