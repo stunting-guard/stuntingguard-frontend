@@ -168,8 +168,9 @@ export default function KelolaDataset() {
 
     setIsUploading(true);
     try {
-      const text = await file.text();
-      const res = await api.post("/admin/dataset/import", { csv: text });
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await api.post("/admin/dataset/import", formData);
 
       if (res?.success) {
         showToast(res.message || "File CSV dataset berhasil diimpor.");

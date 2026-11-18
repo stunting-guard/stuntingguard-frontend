@@ -173,7 +173,7 @@ function ZoneSummaryCard({
   children,
 }) {
   return (
-    <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+    <div className="flex h-full flex-col rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
       <div className="flex items-start justify-between gap-3">
         <p className={`text-[11px] font-bold uppercase tracking-wide ${labelCls}`}>{label}</p>
         <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${iconCls}`}>
@@ -239,23 +239,23 @@ function DusunCard({ dusun, active, onSelect, onHover }) {
 
 function ZonaMap({ dusunList, activeId, onHover, onSelect }) {
   return (
-    <div className="relative overflow-hidden rounded-2xl bg-slate-100/80 p-3">
+    <div className="relative flex h-full w-full items-center justify-center overflow-hidden rounded-2xl bg-slate-100/80 p-3">
       {/* Kompas & skala */}
-      <div className="absolute left-4 top-4 z-10 flex flex-col items-center rounded-xl bg-white px-3 py-2 shadow-sm">
+      <div className="absolute left-4 top-4 z-10 flex flex-col items-center rounded-xl bg-white/95 px-3 py-2 shadow-sm">
         <Navigation className="h-5 w-5 text-teal-700" />
         <span className="text-[10px] font-bold text-teal-700">U</span>
         <span className="mt-1 text-[9px] text-slate-500">Skala 1:15.000</span>
       </div>
 
       {/* Hint */}
-      <div className="absolute right-4 top-4 z-10 flex items-center gap-2 rounded-full bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 shadow-sm">
+      <div className="absolute bottom-4 right-4 z-10 flex items-center gap-2 rounded-full bg-white/95 px-3 py-1.5 text-[11px] font-semibold text-slate-700 shadow-sm">
         <span className="h-2 w-2 rounded-full bg-red-500" />
         Sorot dusun untuk detail interaktif
       </div>
 
       <svg
         viewBox="0 0 860 540"
-        className="h-auto w-full"
+        className="h-auto w-full max-h-[560px]"
         role="img"
         aria-label="Peta zonasi risiko stunting Desa Sukamaju"
       >
@@ -379,8 +379,10 @@ export default function PetaWilayah() {
           setDusunList(mapped);
           if (initialDusunId && mapped.some((d) => d.id === Number(initialDusunId))) {
             setActiveId(Number(initialDusunId));
-          } else if (mapped.length > 0 && !mapped.some((d) => d.id === activeId)) {
-            setActiveId(mapped[0].id);
+          } else if (mapped.length > 0) {
+            setActiveId((prev) =>
+              mapped.some((d) => d.id === prev) ? prev : mapped[0].id
+            );
           }
         }
       } catch {
@@ -463,7 +465,7 @@ export default function PetaWilayah() {
       </section>
 
       {/* Kartu ringkasan zona */}
-      <section className="grid gap-4 sm:grid-cols-3">
+      <section className="grid items-stretch gap-4 sm:grid-cols-2 lg:grid-cols-3 md:gap-5">
         <ZoneSummaryCard
           label="Zona Merah (Tinggi)"
           labelCls="text-red-700"
@@ -508,9 +510,9 @@ export default function PetaWilayah() {
       </section>
 
       {/* Konten utama: Peta + Kartu Dusun */}
-      <section className="grid gap-6 xl:grid-cols-[1.45fr_1fr]">
+      <section className="grid items-stretch gap-5 md:gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
         {/* Kolom Peta */}
-        <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
+        <div className="flex h-full flex-col rounded-2xl border border-slate-100 bg-white p-5 shadow-sm sm:p-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <h2 className="text-lg font-bold text-slate-900">Peta Spasial Desa</h2>
@@ -532,9 +534,9 @@ export default function PetaWilayah() {
             </ul>
           </div>
 
-          <div className="mt-5">
+          <div className="mt-5 flex flex-1 items-center justify-center">
             {isLoading ? (
-              <div className="flex min-h-[360px] flex-col items-center justify-center gap-2 rounded-2xl bg-slate-50">
+              <div className="flex min-h-[360px] w-full flex-col items-center justify-center gap-2 rounded-2xl bg-slate-50">
                 <Loader2 className="h-8 w-8 animate-spin text-teal-700" />
                 <p className="text-xs text-slate-400">Memuat peta spasial wilayah...</p>
               </div>
@@ -550,13 +552,15 @@ export default function PetaWilayah() {
         </div>
 
         {/* Kolom Kartu Dusun */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
+        <div className="flex h-full flex-col gap-4 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm sm:p-6 xl:border-0 xl:bg-transparent xl:p-0 xl:shadow-none">
+          <div className="flex items-center justify-between gap-3">
             <h2 className="text-lg font-bold text-slate-900">Rincian Wilayah Dusun</h2>
-            <span className="text-xs text-slate-500">{dusunList.length} Dusun Terdata</span>
+            <span className="shrink-0 text-xs text-slate-500">
+              {dusunList.length} Dusun Terdata
+            </span>
           </div>
 
-          <div className="space-y-3">
+          <div className="flex-1 space-y-3 xl:max-h-[620px] xl:overflow-y-auto xl:pr-1">
             {dusunList.map((dusun) => (
               <DusunCard
                 key={dusun.id}

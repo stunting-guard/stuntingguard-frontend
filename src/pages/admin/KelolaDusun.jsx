@@ -5,12 +5,9 @@ import {
   ArrowUp,
   ArrowUpDown,
   Baby,
-  Building2,
-  Check,
   CircleAlert,
   CircleCheck,
   Compass,
-  HeartPulse,
   Loader2,
   MapPin,
   Pencil,
@@ -150,8 +147,12 @@ export default function KelolaDusun() {
   }, []);
 
   useEffect(() => {
-    fetchDusun();
-    fetchAvailableKader();
+    const timer = setTimeout(() => {
+      fetchDusun();
+      fetchAvailableKader();
+    }, 0);
+
+    return () => clearTimeout(timer);
   }, [fetchDusun, fetchAvailableKader]);
 
   // Ringkasan metrik statistik

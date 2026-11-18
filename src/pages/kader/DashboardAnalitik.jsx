@@ -16,7 +16,6 @@ import {
   ShieldCheck,
   Sparkles,
   Users,
-  X,
 } from "lucide-react";
 import RiskBadge from "../../components/common/RiskBadge";
 import Pagination from "../../components/common/Pagination";
@@ -125,15 +124,13 @@ export default function DashboardAnalitik() {
     async function fetchDashboard() {
       setIsLoading(true);
       try {
-        const params = {
-          start_date: filters.startDate || undefined,
-          end_date: filters.endDate || undefined,
-          risiko: filters.risiko !== "Semua" ? filters.risiko.toUpperCase() : undefined,
+        const res = await api.getDashboard({
+          startDate: filters.startDate,
+          endDate: filters.endDate,
+          risiko: filters.risiko,
           page,
           limit: PAGE_SIZE,
-        };
-
-        const res = await api.get("/kader/dashboard", params);
+        });
 
         if (!isMounted) return;
 
@@ -214,6 +211,20 @@ export default function DashboardAnalitik() {
   const totalCount = prioritasMeta.total || 0;
   const from = totalCount === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
   const to = Math.min(page * PAGE_SIZE, totalCount);
+
+  const normalizeStatus = (value) =>
+    String(value ?? "").trim().toLowerCase();
+
+  const activeRisiko =
+    filters.risiko === "Semua" ? "" : normalizeStatus(filters.risiko);
+
+  const visiblePrioritasItems = activeRisiko
+    ? prioritasItems.filter(
+        (item) =>
+          normalizeStatus(item.status ?? item.statusRisiko ?? item.risiko) ===
+          activeRisiko
+      )
+    : prioritasItems;
 
   const prioritasRW =
     sebaranRw.length > 0
@@ -422,7 +433,7 @@ export default function DashboardAnalitik() {
               <Loader2 className="h-6 w-6 animate-spin text-[#1B8A5A]" />
               <p className="text-xs text-slate-400">Memuat data prioritas intervensi...</p>
             </div>
-          ) : prioritasItems.length === 0 ? (
+          ) : visiblePrioritasItems.length === 0 ? (
             <div className="px-5 py-12 text-center text-xs text-slate-500">
               Belum ada data keluarga pada filter yang dipilih.
             </div>
@@ -443,7 +454,7 @@ export default function DashboardAnalitik() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {prioritasItems.map((r) => (
+                    {visiblePrioritasItems.map((r) => (
                       <tr key={r.id} className="transition hover:bg-slate-50/70">
                         <td className="whitespace-nowrap px-5 py-3.5 font-mono text-[11px] font-semibold text-slate-600">
                           {r.kodeKeluarga || r.id}
@@ -480,7 +491,7 @@ export default function DashboardAnalitik() {
 
               {/* Mobile: Kartu */}
               <ul className="divide-y divide-slate-100 border-t border-slate-100 md:hidden">
-                {prioritasItems.map((r) => (
+                {visiblePrioritasItems.map((r) => (
                   <li key={r.id} className="space-y-2.5 px-5 py-4">
                     <div className="flex items-start justify-between gap-3">
                       <div>

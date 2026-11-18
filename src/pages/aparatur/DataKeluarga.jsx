@@ -1,5 +1,6 @@
 // src/pages/aparatur/DataKeluarga.jsx
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   Printer,
   Download,
@@ -16,6 +17,7 @@ import {
   Search,
   Filter,
   RotateCw,
+  Eye,
 } from "lucide-react";
 import { api } from "../../services/api";
 
@@ -76,6 +78,38 @@ const LEGEND = [
   { label: "Sedang", dot: "bg-amber-500" },
   { label: "Tinggi", dot: "bg-red-600" },
 ];
+
+const RISIKO_BADGE = {
+  Tinggi: "bg-red-50 text-red-700 ring-1 ring-red-200",
+  Sedang: "bg-amber-50 text-amber-700 ring-1 ring-amber-200",
+  Rendah: "bg-teal-50 text-teal-700 ring-1 ring-teal-200",
+};
+
+function normalizeRisiko(value) {
+  const raw = String(value || "").toUpperCase();
+  if (raw.includes("TINGGI") || raw.includes("MERAH")) return "Tinggi";
+  if (raw.includes("SEDANG") || raw.includes("KUNING")) return "Sedang";
+  return "Rendah";
+}
+
+function ambilFaktorDominan(item) {
+  if (Array.isArray(item.faktor) && item.faktor.length > 0) {
+    const teratas = item.faktor.reduce(
+      (max, cur) => (Number(cur.value) > Number(max.value) ? cur : max),
+      item.faktor[0]
+    );
+    return teratas?.label || teratas?.nama || "-";
+  }
+  if (Array.isArray(item.faktorDominan)) {
+    return (
+      item.faktorDominan
+        .map((f) => f?.label || f)
+        .filter(Boolean)
+        .join(", ") || "-"
+    );
+  }
+  return item.faktorDominan || item.faktorUtama || item.penyebabDominan || "-";
+}
 
 const fmt = new Intl.NumberFormat("id-ID");
 const pct = (n, total) => (total ? (n / total) * 100 : 0);
@@ -265,49 +299,50 @@ function FaktorItem({ faktor }) {
 export default function DataKeluarga() {
   const [dusunList, setDusunList] = useState(DEFAULT_DUSUN);
   const [faktorList, setFaktorList] = useState(DEFAULT_FAKTOR);
+  const [keluargaList, setKeluargaList] = useState([]);
   const [search, setSearch] = useState("");
   const [filterZona, setFilterZona] = useState("Semua");
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
 
-  useEffect(() => {
-    let isMounted = true;
+  const fetchData = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const params = {
+        search: search.trim() || undefined,
+        zona: filterZona !== "Semua" ? filterZona : undefined,
+      };
 
-    async function fetchData() {
-      setIsLoading(true);
-      try {
-        const params = {
-          search: search.trim() || undefined,
-          zona: filterZona !== "Semua" ? filterZona : undefined,
-        };
+      const res = await api.get("/aparatur/data-keluarga", params);
 
-        const res = await api.get("/aparatur/data-keluarga", params);
-        if (!isMounted) return;
-
-        if (res?.success && res?.data) {
-          if (Array.isArray(res.data.dusun)) {
-            setDusunList(res.data.dusun);
-          }
-          if (Array.isArray(res.data.faktor) && res.data.faktor.length > 0) {
-            setFaktorList(res.data.faktor.map(resolveFaktorMeta));
-          }
+      if (res?.success && res?.data) {
+        if (Array.isArray(res.data.dusun)) {
+          setDusunList(res.data.dusun);
         }
-      } catch {
-        // Gunakan state fallback
-      } finally {
-        if (isMounted) setIsLoading(false);
+        if (Array.isArray(res.data.faktor) && res.data.faktor.length > 0) {
+          setFaktorList(res.data.faktor.map(resolveFaktorMeta));
+        }
+        setKeluargaList(
+          Array.isArray(res.data.keluarga) ? res.data.keluarga : []
+        );
       }
+    } catch {
+      // Pertahankan state fallback yang sudah tersedia
+    } finally {
+      setIsLoading(false);
     }
+  }, [search, filterZona]);
 
+  useEffect(() => {
     const timer = setTimeout(() => {
       fetchData();
     }, 250);
 
     return () => {
-      isMounted = false;
       clearTimeout(timer);
     };
-  }, [search, filterZona]);
+  }, [fetchData]);
 
   const summary = useMemo(() => {
     const total = dusunList.reduce((a, d) => a + d.total, 0);
@@ -334,30 +369,10 @@ export default function DataKeluarga() {
     [dusunList, riskField]
   );
 
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [processMessage, setProcessMessage] = useState(null);
-
-  const handleBatchProcess = async () => {
-    if (!window.confirm("Jalankan pemrosesan ulang seluruh data skrining desa dengan model Random Forest terbaru?")) {
-      return;
-    }
-    setIsProcessing(true);
-    setProcessMessage(null);
-    try {
-      const res = await api.post("/aparatur/proses-prediksi", {});
-      if (res?.success) {
-        setProcessMessage(`Berhasil memproses ulang ${res.data?.totalDiproses ?? 0} data skrining dengan model Random Forest!`);
-        const refreshed = await api.get("/aparatur/data-keluarga");
-        if (refreshed?.success && refreshed?.data) {
-          if (Array.isArray(refreshed.data.dusun)) setDusunList(refreshed.data.dusun);
-          if (Array.isArray(refreshed.data.faktor)) setFaktorList(refreshed.data.faktor);
-        }
-      }
-    } catch (err) {
-      alert(err?.data?.message || err?.message || "Gagal memproses ulang data.");
-    } finally {
-      setIsProcessing(false);
-    }
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await fetchData();
+    setIsRefreshing(false);
   };
 
   const handlePrint = () => window.print();
@@ -405,12 +420,14 @@ export default function DataKeluarga() {
           <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
-              onClick={handleBatchProcess}
-              disabled={isProcessing}
+              onClick={handleRefresh}
+              disabled={isLoading || isRefreshing}
               className="inline-flex items-center gap-2 rounded-xl border border-teal-200 bg-teal-50 px-4 py-2.5 text-sm font-semibold text-teal-800 transition hover:bg-teal-100 disabled:opacity-50"
             >
-              <RotateCw className={`h-4 w-4 ${isProcessing ? "animate-spin" : ""}`} />
-              {isProcessing ? "Memproses..." : "Proses Ulang Model RF"}
+              <RotateCw
+                className={`h-4 w-4 ${isRefreshing || isLoading ? "animate-spin" : ""}`}
+              />
+              {isRefreshing ? "Memuat..." : "Muat Ulang Data"}
             </button>
             <button
               type="button"
@@ -435,16 +452,6 @@ export default function DataKeluarga() {
             </button>
           </div>
         </div>
-
-        {processMessage && (
-          <div
-            role="status"
-            className="mt-4 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold text-emerald-800"
-          >
-            <CircleCheck className="h-4 w-4 text-emerald-600 shrink-0" />
-            <span>{processMessage}</span>
-          </div>
-        )}
 
         {/* Filter bar pencarian & zona */}
         <div className="mt-6 flex flex-col gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
@@ -613,6 +620,150 @@ export default function DataKeluarga() {
             ))}
           </div>
         </div>
+      </section>
+
+      {/* Daftar keluarga & balita */}
+      <section className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 className="text-lg font-bold text-slate-900">
+              Daftar Keluarga &amp; Balita
+            </h2>
+            <p className="mt-1 text-xs text-slate-500">
+              Data individu keluarga hasil skrining kader Posyandu se-desa, klik detail untuk
+              melihat hasil prediksi risiko stunting.
+            </p>
+          </div>
+          <span className="self-start rounded-full bg-teal-50 px-3 py-1 text-[11px] font-bold text-teal-800">
+            {keluargaList.length} Data Keluarga
+          </span>
+        </div>
+
+        <div className="mt-5 overflow-x-auto rounded-xl border border-slate-100">
+          <table className="w-full min-w-[960px] text-left text-xs">
+            <thead className="border-b border-slate-100 bg-slate-50/80 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+              <tr>
+                <th scope="col" className="px-4 py-3.5">No</th>
+                <th scope="col" className="px-3 py-3.5">Nama Balita &amp; NIK</th>
+                <th scope="col" className="px-3 py-3.5">
+                  Kepala Keluarga &amp; Nama Ibu
+                </th>
+                <th scope="col" className="px-3 py-3.5">Dusun / RT</th>
+                <th scope="col" className="px-3 py-3.5">Usia</th>
+                <th scope="col" className="px-3 py-3.5 text-center">Status Risiko</th>
+                <th scope="col" className="px-3 py-3.5">Faktor Dominan</th>
+                <th scope="col" className="px-4 py-3.5 text-right">Aksi</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {isLoading ? (
+                <tr>
+                  <td colSpan={8} className="py-12 text-center">
+                    <Loader2 className="mx-auto h-6 w-6 animate-spin text-teal-700" />
+                    <p className="mt-2 text-xs text-slate-500">
+                      Memuat daftar keluarga &amp; balita...
+                    </p>
+                  </td>
+                </tr>
+              ) : keluargaList.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="py-12 text-center">
+                    <Users className="mx-auto h-7 w-7 text-slate-300" />
+                    <p className="mt-2 text-xs font-semibold text-slate-600">
+                      Belum ada data keluarga pada filter saat ini.
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-slate-400">
+                      Data akan muncul setelah kader menyimpan hasil skrining balita.
+                    </p>
+                  </td>
+                </tr>
+              ) : (
+                keluargaList.map((item, idx) => {
+                  const itemId = item.id ?? item.skriningId;
+                  const namaBalita =
+                    item.namaBalita || item.balita?.nama || item.nama || "-";
+                  const nik =
+                    item.nikBalita || item.nik || item.balita?.nik || item.noKk || "-";
+                  const kepala =
+                    item.kepalaKeluarga || item.kepala || item.namaKepalaKeluarga || "-";
+                  const namaIbu = item.namaIbu || item.ibu || item.namaIbuKandung || "-";
+                  const namaDusun =
+                    item.dusun?.nama ||
+                    item.namaDusun ||
+                    (typeof item.dusun === "string" ? item.dusun : "-");
+                  const rt = item.rt || item.dusun?.rt || "-";
+                  const usia = item.usiaBulan ?? item.usia ?? "-";
+                  const risiko = normalizeRisiko(
+                    item.statusRisiko || item.risiko || item.status
+                  );
+                  const faktor = ambilFaktorDominan(item);
+
+                  return (
+                    <tr key={itemId ?? idx} className="transition hover:bg-slate-50/60">
+                      <td className="px-4 py-3.5 font-semibold text-slate-500">
+                        {idx + 1}
+                      </td>
+                      <td className="px-3 py-3.5">
+                        <p className="font-bold text-slate-900">{namaBalita}</p>
+                        <p className="mt-0.5 font-mono text-[10px] text-slate-400">
+                          NIK: {nik}
+                        </p>
+                      </td>
+                      <td className="px-3 py-3.5">
+                        <p className="font-semibold text-slate-800">{kepala}</p>
+                        <p className="mt-0.5 text-[10px] text-slate-400">
+                          Ibu: {namaIbu}
+                        </p>
+                      </td>
+                      <td className="px-3 py-3.5 text-slate-600">
+                        <p className="font-medium">{namaDusun}</p>
+                        <p className="mt-0.5 text-[10px] text-slate-400">RT {rt}</p>
+                      </td>
+                      <td className="px-3 py-3.5 font-medium text-slate-600">
+                        {usia === "-" ? "-" : `${usia} Bulan`}
+                      </td>
+                      <td className="px-3 py-3.5 text-center">
+                        <span
+                          className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold ${
+                            RISIKO_BADGE[risiko]
+                          }`}
+                        >
+                          {risiko}
+                        </span>
+                      </td>
+                      <td className="px-3 py-3.5 text-slate-600">
+                        <p
+                          className="max-w-[220px] truncate"
+                          title={String(faktor)}
+                        >
+                          {faktor}
+                        </p>
+                      </td>
+                      <td className="px-4 py-3.5 text-right">
+                        {itemId ? (
+                          <Link
+                            to={`/aparatur/hasil-prediksi/${itemId}`}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-teal-200 bg-teal-50 px-3 py-1.5 text-[11px] font-semibold text-teal-800 transition hover:bg-teal-100"
+                          >
+                            <Eye className="h-3.5 w-3.5" aria-hidden="true" />
+                            Detail
+                          </Link>
+                        ) : (
+                          <span className="text-[11px] text-slate-400">-</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <p className="mt-3 flex items-center gap-2 text-[11px] text-slate-500">
+          <Info className="h-3.5 w-3.5 shrink-0" />
+          Menampilkan seluruh individu keluarga hasil pencarian &amp; filter zona aktif.
+        </p>
       </section>
     </div>
   );

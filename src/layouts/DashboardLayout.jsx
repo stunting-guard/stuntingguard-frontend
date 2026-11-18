@@ -9,7 +9,7 @@ import { api } from "../services/api";
  * termasuk pencocokan rute berparameter dinamis seperti /kader/hasil-klasifikasi/:id
  * dan /aparatur/hasil-prediksi/:id.
  */
-export function checkIsActive(pathname, item) {
+function checkIsActive(pathname, item) {
   if (!pathname || !item?.to) return false;
 
   // 1. Jika ada matchPrefixes kustom

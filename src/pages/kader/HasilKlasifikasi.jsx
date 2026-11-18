@@ -2,13 +2,11 @@ import { useEffect, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import {
   Activity,
-  AlertCircle,
   AlertTriangle,
   Baby,
   Bath,
   Building2,
   Calendar,
-  CheckCircle2,
   ClipboardCheck,
   Clock,
   CreditCard,
@@ -31,94 +29,6 @@ import {
   Wallet,
 } from "lucide-react";
 import { api } from "../../services/api";
-
-/* ------------------------- FALLBACK DATA ------------------------- */
-const MOCK_HASIL = {
-  id: 42,
-  kodeKeluarga: "KK-SKM-0142",
-  noKk: "3204128492040001",
-  kepalaKeluarga: "Bpk. Slamet Riyadi",
-  namaIbu: "Ibu Siti Aminah",
-  namaBalita: "Ananda Yusuf Pratama",
-  jenisKelamin: "Laki-laki",
-  usiaBulan: 24,
-  keluarga: "Bpk. Slamet & Balita: Ananda Yusuf (24 bln) • RW 03",
-  status: "tinggi",
-  statusRisiko: "TINGGI",
-  keyakinan: 92,
-  statusSosialEkonomi: "Prasejahtera / Penerima Bantuan (PKH/BPNT)",
-  pendapatan: 1500000,
-  pendidikanIbu: "SMP / Sederajat",
-  usiaIbu: 22,
-  kondisiSanitasi: "Tidak Memiliki Jamban / BAB Sembarangan",
-  sumberAir: "Air Sungai / Sumur Terbuka Tidak Terlindung",
-  asiEksklusif: "Tidak (Diberi Susu Formula / Makanan Dini)",
-  praktikMpasi: "Terlambat / Terlalu Dini (< 6 Bulan)",
-  tinggiBadanIbu: 144.0,
-  beratLahirGram: 2450,
-  probabilitas: [
-    {
-      key: "tinggi",
-      label: "Risiko Tinggi",
-      value: 68,
-      desc: "Probabilitas mayoritas klasifikasi",
-    },
-    {
-      key: "sedang",
-      label: "Risiko Sedang",
-      value: 24,
-      desc: "Peluang faktor perantara",
-    },
-    {
-      key: "rendah",
-      label: "Risiko Rendah",
-      value: 8,
-      desc: "Ambang normal sangat kecil",
-    },
-  ],
-  faktor: [
-    {
-      label: "Tidak Memiliki Jamban / BAB Sembarangan",
-      value: 38,
-      icon: Bath,
-      bar: "bg-red-700",
-      text: "text-red-700",
-    },
-    {
-      label: "Air Permukaan / Sungai Tak Terlindung",
-      value: 26,
-      icon: Droplets,
-      bar: "bg-teal-700",
-      text: "text-[#0F2942]",
-    },
-    {
-      label: "Status Sosial Ekonomi Prasejahtera (PKH/BPNT)",
-      value: 18,
-      icon: Wallet,
-      bar: "bg-emerald-600",
-      text: "text-[#0F2942]",
-    },
-    {
-      label: "Tidak Mendapatkan ASI Eksklusif (Formula/Dini)",
-      value: 11,
-      icon: HeartPulse,
-      bar: "bg-slate-500",
-      text: "text-[#0F2942]",
-    },
-    {
-      label: "Praktik MPASI Terlambat atau Terlalu Dini",
-      value: 7,
-      icon: Utensils,
-      bar: "bg-slate-400",
-      text: "text-[#0F2942]",
-    },
-  ],
-  rekomendasi: {
-    teks: "Segera koordinasikan rujukan perbaikan sanitasi/lingkungan ke Sanitarian Puskesmas dan fasilitasi bantuan PMT pemulihan berbasis pangan hewani serta pemantauan intensif oleh Bidan Desa.",
-    batas: "3 Hari Kerja",
-    penerima: "Puskesmas Melati",
-  },
-};
 
 /* Class lengkap ditulis eksplisit agar terdeteksi Tailwind v4 */
 const STATUS_STYLE = {
@@ -236,57 +146,37 @@ export default function HasilKlasifikasi() {
   const { id } = useParams();
   const location = useLocation();
 
-  const [hasil, setHasil] = useState(() => {
-    if (location.state?.hasil) return location.state.hasil;
-    return null;
-  });
-  const [isLoading, setIsLoading] = useState(!location.state?.hasil);
+  const [hasil, setHasil] = useState(() => location.state?.hasil || null);
+  const [isLoading, setIsLoading] = useState(Boolean(id && !location.state?.hasil));
   const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
     let isMounted = true;
 
     async function fetchDetail() {
+      if (!id) {
+        setIsLoading(false);
+        return;
+      }
+
       try {
-        if (id) {
-          const res = await api.get(`/prediksi/${id}`);
-          if (!isMounted) return;
-          if (res?.success && res?.data) {
-            setHasil(res.data);
-            setErrorMessage("");
-          } else {
-            setErrorMessage(res?.message || "Data prediksi tidak ditemukan.");
-          }
-        } else if (!location.state?.hasil) {
-          // Jika tidak ada ID di URL dan tidak ada state, coba cari riwayat terbaru
-          const latestRes = await api.get("/riwayat?limit=1");
-          if (!isMounted) return;
-          if (
-            latestRes?.success &&
-            latestRes?.data?.items &&
-            latestRes.data.items.length > 0
-          ) {
-            const firstId = latestRes.data.items[0].id;
-            const detailRes = await api.get(`/prediksi/${firstId}`);
-            if (detailRes?.success && detailRes?.data) {
-              setHasil(detailRes.data);
-              setErrorMessage("");
-              return;
-            }
-          }
-          // Fallback ke data mock bila database belum memiliki record
-          setHasil(MOCK_HASIL);
+        const res = await api.get(`/prediksi/${id}`);
+        if (!isMounted) return;
+        if (res?.success && res?.data) {
+          setHasil(res.data);
+          setErrorMessage("");
+        } else {
+          setHasil(null);
+          setErrorMessage(res?.message || "Data prediksi tidak ditemukan.");
         }
       } catch (err) {
         if (!isMounted) return;
+        setHasil(null);
         setErrorMessage(
           err?.data?.message ||
             err?.message ||
             "Gagal memuat detail hasil prediksi."
         );
-        if (!hasil) {
-          setHasil(MOCK_HASIL);
-        }
       } finally {
         if (isMounted) setIsLoading(false);
       }
@@ -297,7 +187,7 @@ export default function HasilKlasifikasi() {
     return () => {
       isMounted = false;
     };
-  }, [id, location.state]);
+  }, [id]);
 
   if (isLoading) {
     return (
@@ -310,14 +200,47 @@ export default function HasilKlasifikasi() {
     );
   }
 
-  const currentHasil = hasil || MOCK_HASIL;
+  if (!hasil) {
+    return (
+      <div className="flex min-h-[420px] flex-col items-center justify-center gap-4 rounded-2xl border border-slate-200/80 bg-white p-8 text-center shadow-sm">
+        <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-50 text-[#1B8A5A]">
+          <FileText className="h-7 w-7" aria-hidden="true" />
+        </span>
+        <div className="max-w-md">
+          <h1 className="text-lg font-bold text-[#0F2942]">
+            Belum Ada Data Klasifikasi yang Dipilih
+          </h1>
+          <p className="mt-1.5 text-sm leading-relaxed text-slate-500">
+            {errorMessage ||
+              "Silakan input data keluarga & balita terlebih dahulu untuk melihat hasil klasifikasi risiko stunting."}
+          </p>
+        </div>
+        <Link
+          to="/kader/input-data"
+          className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#0F2942] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#0F2942]/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1B8A5A]"
+        >
+          <PlusCircle className="h-4 w-4" aria-hidden="true" />
+          Input Data Keluarga
+        </Link>
+        <Link
+          to="/kader/riwayat"
+          className="inline-flex items-center justify-center gap-2 text-xs font-semibold text-[#1B8A5A] hover:underline"
+        >
+          <History className="h-3.5 w-3.5" aria-hidden="true" />
+          Lihat Riwayat Prediksi
+        </Link>
+      </div>
+    );
+  }
+
+  const currentHasil = hasil;
   const statusKey = String(
-    currentHasil.status || currentHasil.statusRisiko || "tinggi"
+    currentHasil.status || currentHasil.statusRisiko || "rendah"
   ).toLowerCase();
   const s = STATUS_STYLE[statusKey] || STATUS_STYLE.tinggi;
   const formattedFaktor = Array.isArray(currentHasil.faktor)
     ? currentHasil.faktor.map(resolveFaktorVisual)
-    : MOCK_HASIL.faktor;
+    : [];
 
   // Nama & Identitas Turunan
   const noKk = currentHasil.noKk || "-";
@@ -333,19 +256,6 @@ export default function HasilKlasifikasi() {
 
   return (
     <div className="space-y-5">
-      {errorMessage && (
-        <div
-          role="alert"
-          className="flex items-center gap-2.5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs font-medium text-amber-800"
-        >
-          <AlertCircle
-            className="h-4 w-4 shrink-0 text-amber-600"
-            aria-hidden="true"
-          />
-          <span>{errorMessage} (Menampilkan data acuan)</span>
-        </div>
-      )}
-
       {/* 1. Judul & Meta Informasi */}
       <section className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -616,7 +526,12 @@ export default function HasilKlasifikasi() {
           Distribusi Probabilitas Kelas Random Forest
         </h2>
         <div className="mt-4 grid gap-3 md:grid-cols-3">
-          {(currentHasil.probabilitas || MOCK_HASIL.probabilitas).map((p) => {
+          {(!currentHasil.probabilitas || currentHasil.probabilitas.length === 0) && (
+            <p className="text-xs text-slate-500 md:col-span-3">
+              Data distribusi probabilitas belum tersedia dari server.
+            </p>
+          )}
+          {(currentHasil.probabilitas || []).map((p) => {
             const pKey = String(p.key || "rendah").toLowerCase();
             const pStyle = STATUS_STYLE[pKey] || STATUS_STYLE.rendah;
             return (
@@ -664,6 +579,11 @@ export default function HasilKlasifikasi() {
           </span>
         </div>
         <ul className="mt-4 space-y-4">
+          {formattedFaktor.length === 0 && (
+            <li className="text-xs text-slate-500">
+              Data faktor determinan dominan belum tersedia dari server.
+            </li>
+          )}
           {formattedFaktor.map(({ label, value, icon: Icon, bar, text }) => (
             <li key={label}>
               <div className="mb-1.5 flex items-center justify-between gap-3 text-xs">

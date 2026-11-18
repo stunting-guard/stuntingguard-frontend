@@ -1,10 +1,7 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Activity,
-  CheckCircle2,
   Download,
   Info,
-  Layers,
   Loader2,
   RotateCw,
   Settings,
@@ -12,7 +9,6 @@ import {
   SlidersHorizontal,
   Sparkles,
   Target,
-  TrendingUp,
 } from "lucide-react";
 import Modal, { ModalClose } from "../../components/ui/Modal";
 import Toast from "../../components/ui/Toast";
@@ -188,6 +184,8 @@ export default function EvaluasiModel() {
   const [totalUji, setTotalUji] = useState(DEFAULT_TOTAL_UJI);
   const [tpTotal, setTpTotal] = useState(DEFAULT_TP_TOTAL);
   const [totalDataLatih, setTotalDataLatih] = useState(2568);
+  const [totalDataLatihRiil, setTotalDataLatihRiil] = useState(null);
+  const [datasetRiil, setDatasetRiil] = useState(null);
   const [errorRate, setErrorRate] = useState("7,6");
   const [algoritma, setAlgoritma] = useState("Random Forest (n_estimators=100, max_depth=12)");
   const [versiModel, setVersiModel] = useState("Random Forest Classifier v1.2");
@@ -199,12 +197,71 @@ export default function EvaluasiModel() {
   const [isTraining, setIsTraining] = useState(false);
   const { toast, showToast } = useToast();
 
-  const fetchEvaluasi = async () => {
-    setIsLoading(true);
+  const jumlahDataLatih = totalDataLatihRiil ?? totalDataLatih;
+
+  const rincianDataset = useMemo(() => {
+    if (!datasetRiil || typeof datasetRiil !== "object") return [];
+
+    const labelMap = {
+      total: "Total Data",
+      totalData: "Total Data",
+      jumlahData: "Total Data",
+      totalBaris: "Total Baris",
+      dataLatih: "Data Latih",
+      latih: "Data Latih",
+      dataUji: "Data Uji",
+      uji: "Data Uji",
+      kelasTinggi: "Kelas Risiko Tinggi",
+      tinggi: "Kelas Risiko Tinggi",
+      kelasSedang: "Kelas Risiko Sedang",
+      sedang: "Kelas Risiko Sedang",
+      kelasRendah: "Kelas Risiko Rendah",
+      rendah: "Kelas Risiko Rendah",
+      fitur: "Jumlah Fitur",
+      jumlahFitur: "Jumlah Fitur",
+      sumber: "Sumber Data",
+      updatedAt: "Diperbarui",
+    };
+
+    return Object.entries(datasetRiil)
+      .filter(
+        ([key, value]) =>
+          labelMap[key] &&
+          (typeof value === "number" || typeof value === "string")
+      )
+      .map(([key, value]) => ({ label: labelMap[key], value }));
+  }, [datasetRiil]);
+
+  const terapkanRincianRiil = useCallback((data) => {
+    if (!data) return;
+
+    const detail =
+      data.datasetRiil && typeof data.datasetRiil === "object"
+        ? data.datasetRiil
+        : typeof data.datasetRiil === "number"
+          ? { total: data.datasetRiil }
+          : null;
+
+    if (detail) setDatasetRiil(detail);
+
+    const totalRiil =
+      data.totalDataLatihRiil ??
+      data.totalDatasetRiil ??
+      detail?.total ??
+      detail?.totalData;
+
+    if (totalRiil !== undefined && totalRiil !== null && totalRiil !== "") {
+      const angka = Number(totalRiil);
+      if (Number.isFinite(angka)) setTotalDataLatihRiil(angka);
+    }
+  }, []);
+
+  const fetchEvaluasi = useCallback(async () => {
     try {
       const res = await api.get("/admin/ml/evaluasi");
       if (res?.success && res?.data) {
         const d = res.data;
+        terapkanRincianRiil(d);
         if (Array.isArray(d.metrics)) {
           setMetrics(
             d.metrics.map((m) => ({
@@ -232,11 +289,15 @@ export default function EvaluasiModel() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [terapkanRincianRiil]);
 
   useEffect(() => {
-    fetchEvaluasi();
-  }, []);
+    const timer = setTimeout(() => {
+      fetchEvaluasi();
+    }, 0);
+
+    return () => clearTimeout(timer);
+  }, [fetchEvaluasi]);
 
   const handleDownload = () => {
     window.print();
@@ -247,6 +308,7 @@ export default function EvaluasiModel() {
     try {
       const res = await api.post("/admin/ml/retrain", {});
       if (res?.success) {
+        terapkanRincianRiil(res.data);
         showToast(
           `Pelatihan ulang selesai. Akurasi model terbaru: ${res.data?.akurasiBaru || "94,9"}%`
         );
@@ -276,8 +338,14 @@ export default function EvaluasiModel() {
             </span>
             <span className="text-xs text-slate-400">•</span>
             <span className="text-xs font-medium text-slate-500">
-              Total Data Latih: <b className="text-slate-800">{fmt.format(totalDataLatih)}</b> Skrining
+              Total Data Latih: <b className="text-slate-800">{fmt.format(jumlahDataLatih)}</b> Skrining
             </span>
+            {totalDataLatihRiil !== null && (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-sky-50 px-2.5 py-0.5 text-[10px] font-bold text-sky-800">
+                <span className="h-1.5 w-1.5 rounded-full bg-sky-600" />
+                Data Riil Database
+              </span>
+            )}
             {lastTrained && (
               <>
                 <span className="text-xs text-slate-400">•</span>
@@ -293,6 +361,12 @@ export default function EvaluasiModel() {
           <p className="mt-1 text-xs text-slate-500">
             {algoritma} • Pengujian validasi silang (cross-validation)
           </p>
+          {isLoading && (
+            <span className="mt-2 inline-flex items-center gap-1.5 text-xs text-slate-400">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Memuat data evaluasi model...
+            </span>
+          )}
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
@@ -321,6 +395,43 @@ export default function EvaluasiModel() {
           <MetricCard key={metric.key || metric.label} metric={metric} />
         ))}
       </section>
+
+      {/* Rincian dataset riil dari database */}
+      {rincianDataset.length > 0 && (
+        <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
+          <div className="flex flex-col gap-2 border-b border-slate-100 pb-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-base font-bold text-[#0F2942]">
+                Rincian Dataset Riil
+              </h2>
+              <p className="mt-1 text-xs text-slate-500">
+                Sumber data latih aktual dari basis data sistem desa.
+              </p>
+            </div>
+            <span className="self-start rounded-full bg-sky-50 px-3 py-1 text-[11px] font-semibold text-sky-800 sm:self-auto">
+              {fmt.format(jumlahDataLatih)} Baris
+            </span>
+          </div>
+
+          <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {rincianDataset.map((item) => (
+              <div
+                key={`${item.label}-${item.value}`}
+                className="rounded-xl border border-slate-100 bg-slate-50/70 p-4"
+              >
+                <dt className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                  {item.label}
+                </dt>
+                <dd className="mt-1.5 text-lg font-extrabold text-[#0F2942]">
+                  {typeof item.value === "number"
+                    ? fmt.format(item.value)
+                    : item.value}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+      )}
 
       {/* Confusion matrix & metrik per kategori */}
       <section className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
@@ -578,7 +689,7 @@ export default function EvaluasiModel() {
               {[
                 ["Algoritma", algoritma || "Random Forest Classifier (scikit-learn)"],
                 ["Validasi", "5-Fold Stratified Cross-Validation"],
-                ["Total Data Latih", `${fmt.format(totalDataLatih)} baris data`],
+                ["Total Data Latih", `${fmt.format(jumlahDataLatih)} baris data`],
                 ["Engine Machine Learning", "Python 3.13 / scikit-learn runtime"],
               ].map(([label, value]) => (
                 <div key={label} className="flex items-center justify-between gap-4 px-4 py-2.5">

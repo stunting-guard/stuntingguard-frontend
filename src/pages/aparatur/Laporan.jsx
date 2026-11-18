@@ -490,7 +490,7 @@ export default function Laporan() {
                 <BadgeCheck className="h-4 w-4 text-teal-700" />
                 Validasi Bidan Desa &amp; Kepala Desa Sukamaju Terpenuhi
               </p>
-              <p className="font-semibold text-teal-800">Siap Diujikan Sidang Skripsi</p>
+              <p className="font-semibold text-teal-800">Data Terverifikasi Sistem</p>
             </div>
           </div>
         </div>

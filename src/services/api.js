@@ -128,46 +128,42 @@ export async function request(endpoint, options = {}) {
 
   const url = buildUrl(endpoint, params);
 
-  try {
-    const response = await fetch(url, config);
+  const response = await fetch(url, config);
 
-    // Tangani 401 Unauthorized: hapus sesi & redirect ke login
-    if (response.status === 401) {
-      clearSession();
-      if (
-        typeof window !== "undefined" &&
-        window.location.pathname !== "/login"
-      ) {
-        window.location.href = "/login";
-      }
-      let errMessage = "Sesi telah berakhir. Silakan login kembali.";
-      try {
-        const errorData = await response.json();
-        if (errorData?.message) errMessage = errorData.message;
-      } catch {
-        // Abaikan parse error
-      }
-      const error = new Error(errMessage);
-      error.status = 401;
-      throw error;
+  // Tangani 401 Unauthorized: hapus sesi & redirect ke login
+  if (response.status === 401) {
+    clearSession();
+    if (
+      typeof window !== "undefined" &&
+      window.location.pathname !== "/login"
+    ) {
+      window.location.href = "/login";
     }
-
-    // Parse JSON
-    const data = await response.json().catch(() => null);
-
-    if (!response.ok) {
-      const err = new Error(
-        data?.message || `Permintaan gagal dengan status ${response.status}`
-      );
-      err.status = response.status;
-      err.data = data;
-      throw err;
+    let errMessage = "Sesi telah berakhir. Silakan login kembali.";
+    try {
+      const errorData = await response.json();
+      if (errorData?.message) errMessage = errorData.message;
+    } catch {
+      // Abaikan parse error
     }
+    const error = new Error(errMessage);
+    error.status = 401;
+    throw error;
+  }
 
-    return data;
-  } catch (err) {
+  // Parse JSON
+  const data = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    const err = new Error(
+      data?.message || `Permintaan gagal dengan status ${response.status}`
+    );
+    err.status = response.status;
+    err.data = data;
     throw err;
   }
+
+  return data;
 }
 
 /* ------------------------------------------------------------------ */
@@ -254,6 +250,27 @@ export const api = {
   delete: (endpoint, options = {}) =>
     request(endpoint, { method: "DELETE", ...options }),
 
+  // Kader helper — dashboard analitik dengan filter tanggal & status risiko
+  getDashboard: ({ startDate, endDate, risiko, page = 1, limit = 5 } = {}) => {
+    const normalizedRisiko =
+      typeof risiko === "string" &&
+      risiko.trim() &&
+      risiko.trim().toLowerCase() !== "semua"
+        ? risiko.trim().toUpperCase()
+        : undefined;
+
+    return request("/kader/dashboard", {
+      method: "GET",
+      params: {
+        start_date: startDate || undefined,
+        end_date: endDate || undefined,
+        risiko: normalizedRisiko,
+        page,
+        limit,
+      },
+    });
+  },
+
   downloadBlob,
 
   // Auth helper
@@ -289,6 +306,16 @@ export const api = {
       setUser(res.data);
     }
     return res;
+  },
+
+  // Aparatur helper — klasifikasi ulang satu hasil prediksi
+  async reclassifyHasilPrediksi(id) {
+    if (id === undefined || id === null || id === "") {
+      throw new Error("ID hasil prediksi tidak valid untuk klasifikasi ulang.");
+    }
+    return request(`/aparatur/hasil-prediksi/${id}/reclassify`, {
+      method: "POST",
+    });
   },
 };
 

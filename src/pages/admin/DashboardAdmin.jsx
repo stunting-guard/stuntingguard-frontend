@@ -187,7 +187,7 @@ export default function DashboardAdmin() {
             <div>
               <h2 className="text-lg font-bold text-[#0F2942]">Akses Cepat Modul Utama</h2>
               <p className="mt-0.5 text-xs text-slate-500">
-                Menu interaktif untuk demonstrasi langsung saat sesi tanya jawab sidang
+                Menu interaktif untuk mendukung operasional dan pemantauan sistem desa
               </p>
             </div>
           </div>
