@@ -10,6 +10,7 @@ import {
   PieChart,
   ShieldCheck,
   Users,
+  X,
 } from "lucide-react";
 import RiskBadge from "../../components/common/RiskBadge";
 import Pagination from "../../components/common/Pagination";
@@ -19,7 +20,6 @@ import { api } from "../../services/api";
 const DEFAULT_FILTER_OPTIONS = {
   kecamatan: ["Semua Kecamatan", "Kec. Cibadak", "Kec. Cikalong"],
   desa: ["Semua Desa", "Desa Sukamaju", "Desa Sukamulya"],
-  periode: ["Semua Periode", "Maret 2025", "Februari 2025", "Januari 2025"],
 };
 
 const DEFAULT_SUMMARY = {
@@ -112,7 +112,8 @@ export default function DashboardAnalitik() {
   const [filters, setFilters] = useState({
     kecamatan: "Semua Kecamatan",
     desa: "Semua Desa",
-    periode: "Semua Periode",
+    startDate: "",
+    endDate: "",
   });
   const [page, setPage] = useState(1);
 
@@ -137,11 +138,9 @@ export default function DashboardAnalitik() {
         if (isMounted && res?.success && res?.data) {
           const kec = ["Semua Kecamatan", ...(res.data.kecamatan || [])];
           const des = ["Semua Desa", ...(res.data.desa || [])];
-          const per = ["Semua Periode", ...(res.data.periode || [])];
           setFilterOptions({
             kecamatan: [...new Set(kec)],
             desa: [...new Set(des)],
-            periode: [...new Set(per)],
           });
         }
       } catch {
@@ -165,7 +164,8 @@ export default function DashboardAnalitik() {
           kecamatan:
             filters.kecamatan !== "Semua Kecamatan" ? filters.kecamatan : undefined,
           desa: filters.desa !== "Semua Desa" ? filters.desa : undefined,
-          periode: filters.periode !== "Semua Periode" ? filters.periode : undefined,
+          start_date: filters.startDate || undefined,
+          end_date: filters.endDate || undefined,
           page,
           limit: PAGE_SIZE,
         };
@@ -225,6 +225,24 @@ export default function DashboardAnalitik() {
     setPage(1);
   };
 
+  const setDateFilter = (key) => (event) => {
+    const value = event.target.value;
+    setFilters((prev) => {
+      const next = { ...prev, [key]: value };
+      if (next.startDate && next.endDate && next.startDate > next.endDate) {
+        if (key === "startDate") next.endDate = "";
+        else next.startDate = "";
+      }
+      return next;
+    });
+    setPage(1);
+  };
+
+  const resetDateFilter = () => {
+    setFilters((prev) => ({ ...prev, startDate: "", endDate: "" }));
+    setPage(1);
+  };
+
   const totalPages = Math.max(1, prioritasMeta.totalPages || 1);
   const totalCount = prioritasMeta.total || 0;
   const from = totalCount === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
@@ -240,8 +258,15 @@ export default function DashboardAnalitik() {
   const handleDownload = async () => {
     setIsExporting(true);
     try {
+      const params = new URLSearchParams({
+        module: "kader-dashboard",
+        format: "xlsx",
+      });
+      if (filters.startDate) params.set("start_date", filters.startDate);
+      if (filters.endDate) params.set("end_date", filters.endDate);
+
       await api.downloadBlob(
-        "/laporan/export?module=kader-dashboard&format=xlsx",
+        `/laporan/export?${params.toString()}`,
         `Laporan-Dashboard-Kader-${new Date().toISOString().slice(0, 10)}.xlsx`
       );
     } catch {
@@ -268,9 +293,9 @@ export default function DashboardAnalitik() {
       >
         <p className="flex items-center gap-2 text-xs font-medium text-slate-500">
           <Filter className="h-4 w-4" aria-hidden="true" />
-          Filter Wilayah:
+          Filter Data:
         </p>
-        <div className="grid flex-1 gap-2 sm:grid-cols-3">
+        <div className="grid flex-1 gap-2 sm:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(20rem,2fr)]">
           <FilterSelect
             label="Kecamatan"
             value={filters.kecamatan}
@@ -283,13 +308,49 @@ export default function DashboardAnalitik() {
             onChange={setFilter("desa")}
             options={filterOptions.desa}
           />
-          <FilterSelect
-            label="Periode"
-            icon={CalendarDays}
-            value={filters.periode}
-            onChange={setFilter("periode")}
-            options={filterOptions.periode}
-          />
+          <div className="flex min-w-0 items-end gap-2 sm:col-span-2 xl:col-span-1">
+            <label className="min-w-0 flex-1">
+              <span className="mb-1 flex items-center gap-1 text-[10px] font-semibold text-slate-500">
+                <CalendarDays className="h-3 w-3" aria-hidden="true" />
+                Tanggal Mulai
+              </span>
+              <input
+                id="dashboard-start-date"
+                type="date"
+                value={filters.startDate}
+                max={filters.endDate || undefined}
+                onChange={setDateFilter("startDate")}
+                aria-label="Tanggal mulai"
+                className="w-full min-w-0 rounded-lg border border-slate-200 bg-slate-50 px-2 py-2 text-xs font-medium text-[#0F2942] outline-none transition focus:border-[#1B8A5A] focus:ring-2 focus:ring-[#1B8A5A]/25"
+              />
+            </label>
+            <label className="min-w-0 flex-1">
+              <span className="mb-1 flex items-center gap-1 text-[10px] font-semibold text-slate-500">
+                <CalendarDays className="h-3 w-3" aria-hidden="true" />
+                Tanggal Akhir
+              </span>
+              <input
+                id="dashboard-end-date"
+                type="date"
+                value={filters.endDate}
+                min={filters.startDate || undefined}
+                onChange={setDateFilter("endDate")}
+                aria-label="Tanggal akhir"
+                className="w-full min-w-0 rounded-lg border border-slate-200 bg-slate-50 px-2 py-2 text-xs font-medium text-[#0F2942] outline-none transition focus:border-[#1B8A5A] focus:ring-2 focus:ring-[#1B8A5A]/25"
+              />
+            </label>
+            {(filters.startDate || filters.endDate) && (
+              <button
+                type="button"
+                onClick={resetDateFilter}
+                aria-label="Reset rentang tanggal"
+                title="Reset rentang tanggal"
+                className="mb-px inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1B8A5A]"
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+              </button>
+            )}
+          </div>
         </div>
         <button
           type="button"

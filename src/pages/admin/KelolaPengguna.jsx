@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   ArrowDown,
@@ -8,21 +8,19 @@ import {
   Check,
   ChevronDown,
   CircleCheck,
-  ClipboardCheck,
   Copy,
   Crown,
   KeyRound,
   Landmark,
   Loader2,
   Pencil,
-  Plus,
   RotateCcw,
   ShieldCheck,
   Trash2,
   UserPlus,
   Users,
 } from "lucide-react";
-import Modal, { ModalClose } from "../../components/ui/Modal";
+import Modal from "../../components/ui/Modal";
 import Toast from "../../components/ui/Toast";
 import StatCard from "../../components/ui/StatCard";
 import PageHeader from "../../components/ui/PageHeader";
@@ -76,13 +74,9 @@ const FILTER_STATUS = [
 const EMPTY_FORM = {
   nama: "",
   email: "",
-  username: "",
   password: "",
   peran: "Kader",
-  peranDetail: "",
-  wilayah: "",
   dusunId: "",
-  status: "Aktif",
 };
 
 const AVATAR_TONES = [
@@ -96,6 +90,10 @@ const AVATAR_TONES = [
 
 const fmt = new Intl.NumberFormat("id-ID");
 const satuDesimal = (n) => n.toFixed(1).replace(".", ",");
+const inputFieldClass = (hasError) =>
+  `${inputClass} ${
+    hasError ? "border-red-300 bg-red-50 focus:border-red-500 focus:ring-red-100" : ""
+  }`;
 
 function inisial(nama = "") {
   return nama
@@ -116,10 +114,13 @@ function SortIcon({ active, direction }) {
 
 export default function KelolaPengguna() {
   const [users, setUsers] = useState([]);
+  const [summary, setSummary] = useState(null);
   const [dusunOptions, setDusunOptions] = useState([]);
   const [totalCount, setTotalCount] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [wilayahError, setWilayahError] = useState("");
 
   const [query, setQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("Semua");
@@ -151,9 +152,16 @@ export default function KelolaPengguna() {
         const res = await api.get("/master/wilayah");
         if (isMounted && res?.success && Array.isArray(res?.data?.dusun)) {
           setDusunOptions(res.data.dusun);
+          setWilayahError("");
+        } else if (isMounted) {
+          setWilayahError(res?.message || "Daftar wilayah tugas tidak dapat dimuat.");
         }
-      } catch {
-        // Fallback default
+      } catch (err) {
+        if (isMounted) {
+          setWilayahError(
+            err?.data?.message || err?.message || "Daftar wilayah tugas tidak dapat dimuat."
+          );
+        }
       }
     }
     loadMasterWilayah();
@@ -163,12 +171,14 @@ export default function KelolaPengguna() {
   }, []);
 
   // Muat data pengguna dari backend
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     setIsLoading(true);
+    setLoadError("");
     try {
       const params = {
         search: query.trim() || undefined,
         role: roleFilter !== "Semua" ? roleFilter : undefined,
+        status: statusFilter !== "Semua" ? statusFilter : undefined,
         page,
         limit: PAGE_SIZE,
         sortKey: sortKey || undefined,
@@ -177,19 +187,29 @@ export default function KelolaPengguna() {
 
       const res = await api.get("/admin/users", params);
 
-      if (res?.success && res?.data) {
-        setUsers(res.data.items || []);
-        if (res.data.meta) {
-          setTotalCount(res.data.meta.total || 0);
-          setTotalPages(res.data.meta.totalPages || 1);
-        }
+      if (!res?.success || !res?.data) {
+        throw new Error(res?.message || "Respons daftar pengguna dari server tidak valid.");
       }
+
+      const meta = res.data.meta || {};
+      const nextTotalPages = Math.max(1, Number(meta.totalPages) || 1);
+      setUsers(Array.isArray(res.data.items) ? res.data.items : []);
+      setSummary(res.data.summary || null);
+      setTotalCount(Number(meta.total) || 0);
+      setTotalPages(nextTotalPages);
+      if (page > nextTotalPages) setPage(nextTotalPages);
     } catch (err) {
-      showToast(err?.data?.message || err?.message || "Gagal memuat data pengguna.");
+      setUsers([]);
+      setSummary(null);
+      setTotalCount(0);
+      setTotalPages(1);
+      setLoadError(
+        err?.data?.message || err?.message || "Gagal memuat data pengguna."
+      );
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [query, roleFilter, statusFilter, page, sortKey, sortDir]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -199,29 +219,25 @@ export default function KelolaPengguna() {
     return () => {
       clearTimeout(timer);
     };
-  }, [query, roleFilter, page, sortKey, sortDir]);
+  }, [fetchUsers]);
 
   /* ------------------------- Filter, sort, pagination ------------------------- */
   const from = totalCount === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
   const to = Math.min(page * PAGE_SIZE, totalCount);
 
   const ringkasan = useMemo(() => {
-    const total = totalCount || users.length;
-    const aktif = users.filter((u) => u.status === "Aktif").length;
-    const peran = ROLE_OPTIONS.reduce(
-      (acc, role) => ({
-        ...acc,
-        [role]: users.filter((u) => u.peran === role || u.role === role.toUpperCase()).length,
-      }),
-      {}
-    );
+    if (!summary) return null;
+    const total = Number(summary.total) || 0;
+    const aktif = Number(summary.aktif) || 0;
+    const nonaktif = Number(summary.nonaktif) || 0;
+    const peran = summary.peran || {};
     const terbesar = ROLE_OPTIONS.reduce(
       (a, b) => ((peran[b] || 0) > (peran[a] || 0) ? b : a),
       ROLE_OPTIONS[0]
     );
     const persen = total === 0 ? 0 : ((peran[terbesar] || 0) / total) * 100;
-    return { total, aktif, nonaktif: total - aktif, peran, terbesar, persen };
-  }, [users, totalCount]);
+    return { total, aktif, nonaktif, peran, terbesar: total ? terbesar : null, persen };
+  }, [summary]);
 
   const resetFilter = () => {
     setQuery("");
@@ -260,13 +276,9 @@ export default function KelolaPengguna() {
     setForm({
       nama: user.nama || user.name || "",
       email: user.email || "",
-      username: user.username || "",
       password: "",
       peran: user.peran || "Kader",
-      peranDetail: user.peranDetail || "",
-      wilayah: user.wilayah || "",
       dusunId: user.dusunId ? String(user.dusunId) : "",
-      status: user.status || "Aktif",
     });
     setErrors({});
     setFormOpen(true);
@@ -282,6 +294,9 @@ export default function KelolaPengguna() {
     if (!form.nama.trim()) next.nama = "Nama lengkap wajib diisi.";
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
       next.email = "Masukkan alamat email yang valid.";
+    }
+    if (!editing && form.password && form.password.trim().length < 6) {
+      next.password = "Kata sandi harus memiliki minimal 6 karakter.";
     }
     return next;
   };
@@ -300,7 +315,7 @@ export default function KelolaPengguna() {
         name: form.nama.trim(),
         email: form.email.trim().toLowerCase(),
         role: form.peran.toUpperCase(),
-        dusunId: form.dusunId ? Number(form.dusunId) : undefined,
+        dusunId: form.peran === "Kader" && form.dusunId ? Number(form.dusunId) : null,
         password: form.password ? form.password.trim() : undefined,
       };
 
@@ -322,14 +337,18 @@ export default function KelolaPengguna() {
               (tempPass ? ` Sandi awal: ${tempPass}` : "")
           );
           setFormOpen(false);
-          fetchUsers();
+          if (page !== 1) setPage(1);
+          else fetchUsers();
         } else {
           showToast(res?.message || "Gagal membuat pengguna.");
         }
       }
     } catch (err) {
       if (err?.data?.errors) {
-        setErrors(err.data.errors);
+        setErrors({
+          ...err.data.errors,
+          nama: err.data.errors.nama || err.data.errors.name,
+        });
       }
       showToast(err?.data?.message || err?.message || "Terjadi kesalahan saat menyimpan akun.");
     } finally {
@@ -372,7 +391,12 @@ export default function KelolaPengguna() {
     try {
       const res = await api.patch(`/admin/users/${resetTarget.id}/reset-password`, {});
       if (res?.success && res?.data) {
-        const pass = res.data.temporaryPassword || res.data.password || "SG-Temp123";
+        const pass = res.data.temporaryPassword || res.data.password;
+        if (!pass) {
+          setResetState({ loading: false, password: "", copied: false });
+          showToast("Reset berhasil, tetapi backend tidak mengembalikan kata sandi sementara.");
+          return;
+        }
         setResetState({ loading: false, password: pass, copied: false });
         showToast(`Kata sandi akun ${resetTarget.nama} berhasil direset.`);
       } else {
@@ -406,7 +430,7 @@ export default function KelolaPengguna() {
         chip="Panel Kendali Akun Pengguna"
         title="Kelola Pengguna Sistem"
         description="Pengaturan hak akses role-based access control (RBAC) untuk Kader Posyandu, Aparatur Desa, dan Admin sistem."
-        action={
+        actions={
           <button
             type="button"
             onClick={bukaTambah}
@@ -422,7 +446,13 @@ export default function KelolaPengguna() {
       <section aria-label="Ringkasan pengguna" className="grid gap-4 md:grid-cols-3 lg:gap-5">
         <StatCard
           label="Total Pengguna Terdaftar"
-          value={fmt.format(ringkasan.total)}
+          value={
+            ringkasan
+              ? fmt.format(ringkasan.total)
+              : isLoading
+              ? "Memuat..."
+              : "—"
+          }
           caption="Akun Sistem"
           icon={<Users className="h-5 w-5" strokeWidth={1.8} aria-hidden="true" />}
           footerBorder
@@ -430,9 +460,9 @@ export default function KelolaPengguna() {
             <div className="flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center gap-1.5 rounded-md bg-[#E7F5F0] px-2.5 py-1 text-[11px] font-semibold text-teal-800">
                 <CircleCheck className="h-3.5 w-3.5" aria-hidden="true" />
-                {ringkasan.aktif} Akun Aktif
+                {ringkasan?.aktif ?? "—"} Akun Aktif
               </span>
-              {ringkasan.nonaktif > 0 && (
+              {ringkasan?.nonaktif > 0 && (
                 <span className="text-[11px] text-slate-500">
                   {ringkasan.nonaktif} Nonaktif
                 </span>
@@ -443,8 +473,18 @@ export default function KelolaPengguna() {
 
         <StatCard
           label="Distribusi Peran Terbanyak"
-          value={ROLE_META[ringkasan.terbesar]?.label || "Kader Posyandu"}
-          caption={`${satuDesimal(ringkasan.persen)}% Dari Total Akun`}
+          value={
+            ringkasan?.terbesar
+              ? ROLE_META[ringkasan.terbesar].label
+              : isLoading
+              ? "Memuat..."
+              : "—"
+          }
+          caption={
+            ringkasan
+              ? `${satuDesimal(ringkasan.persen)}% Dari Total Akun`
+              : "Ringkasan dari database"
+          }
           icon={<Crown className="h-5 w-5" strokeWidth={1.8} aria-hidden="true" />}
         />
 
@@ -473,7 +513,7 @@ export default function KelolaPengguna() {
                 setQuery(val);
                 setPage(1);
               }}
-              placeholder="Cari nama, email, username, atau wilayah tugas..."
+              placeholder="Cari nama, email, atau username..."
               aria-label="Cari pengguna"
             />
           </div>
@@ -505,7 +545,7 @@ export default function KelolaPengguna() {
               />
             </div>
 
-            {(query || roleFilter !== "Semua" || statusFilter !== "Semua") && (
+            {(query || roleFilter !== "Semua" || statusFilter !== "Semua" || sortKey) && (
               <button
                 type="button"
                 onClick={resetFilter}
@@ -549,17 +589,7 @@ export default function KelolaPengguna() {
                   <th scope="col" className="px-3 py-3.5">
                     Wilayah Tugas / Instansi
                   </th>
-                  <th scope="col" className="px-3 py-3.5 text-center">
-                    <button
-                      type="button"
-                      onClick={() => toggleSort("status")}
-                      className="inline-flex items-center gap-1.5 font-semibold transition hover:text-teal-800"
-                      aria-sort={ariaSort("status")}
-                    >
-                      Status
-                      <SortIcon active={sortKey === "status"} direction={sortDir} />
-                    </button>
-                  </th>
+                  <th scope="col" className="px-3 py-3.5 text-center">Status</th>
                   <th scope="col" className="px-5 py-3.5 text-right">
                     Aksi
                   </th>
@@ -573,8 +603,30 @@ export default function KelolaPengguna() {
                       <p className="mt-2">Memuat daftar pengguna sistem...</p>
                     </td>
                   </tr>
+                ) : loadError ? (
+                  <tr>
+                    <td colSpan={5} className="py-10 text-center text-xs text-red-700">
+                      <AlertTriangle className="mx-auto h-6 w-6" aria-hidden="true" />
+                      <p className="mt-2">{loadError}</p>
+                      <button
+                        type="button"
+                        onClick={fetchUsers}
+                        className="mt-3 rounded-lg border border-red-200 px-3 py-1.5 font-semibold hover:bg-red-50"
+                      >
+                        Coba lagi
+                      </button>
+                    </td>
+                  </tr>
                 ) : users.length === 0 ? (
-                  <EmptyTableRow colSpan={5} message="Tidak ada pengguna yang cocok dengan kriteria pencarian." />
+                  <EmptyTableRow
+                    colSpan={5}
+                    title={statusFilter === "Nonaktif" ? "Tidak ada akun nonaktif" : "Tidak ada pengguna"}
+                    description={
+                      statusFilter === "Nonaktif"
+                        ? "Skema backend saat ini tidak menyimpan status nonaktif; akun yang dikembalikan berstatus Aktif."
+                        : "Tidak ada pengguna yang cocok dengan kriteria pencarian atau filter."
+                    }
+                  />
                 ) : (
                   users.map((u, idx) => {
                     const roleKey = u.peran || (u.role === "ADMIN" ? "Admin" : u.role === "APARATUR" ? "Aparatur" : "Kader");
@@ -597,7 +649,7 @@ export default function KelolaPengguna() {
                                 {u.nama || u.name}
                               </p>
                               <p className="truncate text-[11px] text-slate-400">
-                                {u.email} • @{u.username}
+                                {u.email} • @{u.username || "-"}
                               </p>
                             </div>
                           </div>
@@ -666,7 +718,12 @@ export default function KelolaPengguna() {
             </table>
           </div>
 
-          <TableFooter from={from} to={to} total={totalCount} page={page} totalPages={totalPages} onPageChange={goTo} />
+          <TableFooter
+            summary={`Menampilkan ${from}–${to} dari ${fmt.format(totalCount)} pengguna`}
+            page={page}
+            totalPages={totalPages}
+            onChange={goTo}
+          />
         </div>
       </section>
 
@@ -685,7 +742,7 @@ export default function KelolaPengguna() {
               value={form.nama}
               onChange={(e) => ubahField("nama", e.target.value)}
               placeholder="Contoh: Siti Rahmawati, S.Tr.Keb"
-              className={inputClass(!!errors.nama)}
+              className={inputFieldClass(!!errors.nama)}
             />
           </Field>
 
@@ -696,9 +753,12 @@ export default function KelolaPengguna() {
               value={form.email}
               onChange={(e) => ubahField("email", e.target.value)}
               placeholder="nama@desa-sehat.id"
-              className={inputClass(!!errors.email)}
+              className={inputFieldClass(!!errors.email)}
             />
           </Field>
+          <p className="-mt-2 text-[11px] text-slate-500">
+            Username dibuat otomatis dari bagian email sebelum tanda @.
+          </p>
 
           {!editing && (
             <Field
@@ -713,7 +773,7 @@ export default function KelolaPengguna() {
                 value={form.password}
                 onChange={(e) => ubahField("password", e.target.value)}
                 placeholder="Minimal 6 karakter"
-                className={inputClass(!!errors.password)}
+                className={inputFieldClass(!!errors.password)}
               />
             </Field>
           )}
@@ -759,9 +819,17 @@ export default function KelolaPengguna() {
                   </select>
                   <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 </div>
+                {wilayahError && (
+                  <p role="alert" className="mt-1 text-[11px] text-red-600">
+                    {wilayahError}
+                  </p>
+                )}
               </div>
             )}
           </div>
+          <p className="-mt-2 text-[11px] text-slate-500">
+            Backend mengembalikan status Aktif; perubahan status dan username manual belum didukung.
+          </p>
 
           <div className="mt-6 flex justify-end gap-3 pt-3 border-t border-slate-100">
             <button

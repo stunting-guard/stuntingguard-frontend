@@ -1,24 +1,20 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
-  Check,
   CircleCheck,
   Download,
   Eye,
   FileSpreadsheet,
-  FileText,
   Loader2,
   Mars,
-  RotateCw,
   SlidersHorizontal,
-  Table2,
   Trash2,
   UploadCloud,
   Users,
   Venus,
   X,
 } from "lucide-react";
-import Modal, { ModalClose } from "../../components/ui/Modal";
+import Modal from "../../components/ui/Modal";
 import Toast from "../../components/ui/Toast";
 import StatCard from "../../components/ui/StatCard";
 import PageHeader from "../../components/ui/PageHeader";
@@ -27,18 +23,7 @@ import FilterSelect from "../../components/ui/FilterSelect";
 import TableFooter from "../../components/ui/TableFooter";
 import EmptyTableRow from "../../components/ui/EmptyTableRow";
 import useToast from "../../hooks/useToast";
-import useSafeTimeout from "../../hooks/useSafeTimeout";
 import { api } from "../../services/api";
-
-/* ------------------------------------------------------------------ */
-/* Fallback data                                                      */
-/* ------------------------------------------------------------------ */
-const DEFAULT_SUMMARY = {
-  totalData: 12840,
-  jumlahFitur: 6,
-  statusDataset: "Siap Latih",
-  pageSize: 10,
-};
 
 const RISIKO_BADGE = {
   Tinggi: "bg-red-50 text-red-700",
@@ -76,24 +61,16 @@ function ukuranFile(bytes) {
   return `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }
 
-function InfoChip({ icon: Icon, children }) {
-  return (
-    <span className="inline-flex items-center gap-2 rounded-lg bg-teal-50 px-3 py-1.5 text-xs font-semibold text-teal-800">
-      <Icon className="h-4 w-4" aria-hidden="true" />
-      {children}
-    </span>
-  );
-}
-
 /* ------------------------------------------------------------------ */
 /* Halaman                                                             */
 /* ------------------------------------------------------------------ */
 export default function KelolaDataset() {
-  const [summary, setSummary] = useState(DEFAULT_SUMMARY);
+  const [summary, setSummary] = useState(null);
   const [balita, setBalita] = useState([]);
   const [totalCount, setTotalCount] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
   const [query, setQuery] = useState("");
   const [kategori, setKategori] = useState(KATEGORI_OPTIONS[0]);
@@ -108,13 +85,13 @@ export default function KelolaDataset() {
   const fileRef = useRef(null);
 
   const [detailRow, setDetailRow] = useState(null);
-  const [deleteId, setDeleteId] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
   const { toast, showToast } = useToast();
 
-  const fetchDataset = async () => {
+  const fetchDataset = useCallback(async () => {
     setIsLoading(true);
+    setLoadError("");
     try {
       const params = {
         search: query.trim() || undefined,
@@ -125,22 +102,27 @@ export default function KelolaDataset() {
       };
 
       const res = await api.get("/admin/dataset", params);
-      if (res?.success && res?.data) {
-        setBalita(res.data.items || []);
-        if (res.data.summary) {
-          setSummary(res.data.summary);
-        }
-        if (res.data.meta) {
-          setTotalCount(res.data.meta.total || 0);
-          setTotalPages(res.data.meta.totalPages || 1);
-        }
+      if (!res?.success || !res?.data) {
+        throw new Error(res?.message || "Respons dataset dari server tidak valid.");
       }
+
+      const meta = res.data.meta || {};
+      const nextTotalPages = Math.max(1, Number(meta.totalPages) || 1);
+      setBalita(Array.isArray(res.data.items) ? res.data.items : []);
+      setSummary(res.data.summary || null);
+      setTotalCount(Number(meta.total) || 0);
+      setTotalPages(nextTotalPages);
+      if (page > nextTotalPages) setPage(nextTotalPages);
     } catch (err) {
-      showToast(err?.data?.message || err?.message || "Gagal memuat dataset.");
+      setBalita([]);
+      setSummary(null);
+      setTotalCount(0);
+      setTotalPages(1);
+      setLoadError(err?.data?.message || err?.message || "Gagal memuat dataset.");
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [page, query, kategori, urutan]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -150,7 +132,7 @@ export default function KelolaDataset() {
     return () => {
       clearTimeout(timer);
     };
-  }, [query, kategori, urutan, page]);
+  }, [fetchDataset]);
 
   const from = totalCount === 0 ? 0 : (page - 1) * 10 + 1;
   const to = Math.min(page * 10, totalCount);
@@ -249,7 +231,7 @@ export default function KelolaDataset() {
         chip="Manajemen Dataset Mesin"
         title="Kelola Dataset Balita"
         description="Dataset komprehensif antropometri dan determinan lingkungan untuk pelatihan model Random Forest StuntingGuard."
-        action={
+        actions={
           <div className="flex flex-wrap items-center gap-2.5">
             <button
               type="button"
@@ -279,30 +261,23 @@ export default function KelolaDataset() {
       <section aria-label="Ringkasan dataset" className="grid gap-4 md:grid-cols-3 lg:gap-5">
         <StatCard
           label="Total Data Balita"
-          value={fmt.format(summary.totalData || totalCount)}
-          caption="Baris Terdata"
+          value={fmt.format(summary?.totalData ?? totalCount)}
+          caption="Baris sesuai filter"
           icon={<Users className="h-5 w-5" strokeWidth={1.8} aria-hidden="true" />}
-          footerBorder
-          footer={
-            <span className="inline-flex items-center gap-1.5 rounded-md bg-[#E7F5F0] px-2.5 py-1 text-[11px] font-semibold text-teal-800">
-              <CircleCheck className="h-3.5 w-3.5" aria-hidden="true" />
-              Validasi Antropometri Bersih
-            </span>
-          }
         />
 
         <StatCard
           label="Jumlah Fitur Determinan"
-          value={`${summary.jumlahFitur || 6} Fitur`}
+          value={summary ? `${summary.jumlahFitur} Fitur` : "—"}
           caption="Variabel Input Prediksi"
           icon={<SlidersHorizontal className="h-5 w-5" strokeWidth={1.8} aria-hidden="true" />}
         />
 
         <StatCard
           label="Status Kesiapan Latih"
-          value={summary.statusDataset || "Siap Latih"}
+          value={summary?.statusDataset || (isLoading ? "Memuat..." : "—")}
           valueClassName="mt-4 text-3xl font-extrabold leading-none tracking-tight text-teal-800 sm:text-4xl"
-          caption="100% Bebas Missing Value"
+          caption="Status dari dataset backend"
           icon={<CircleCheck className="h-5 w-5" strokeWidth={1.8} aria-hidden="true" />}
         />
       </section>
@@ -371,8 +346,26 @@ export default function KelolaDataset() {
                       <p className="mt-2">Memuat baris dataset balita...</p>
                     </td>
                   </tr>
+                ) : loadError ? (
+                  <tr>
+                    <td colSpan={7} className="py-10 text-center text-xs text-red-700">
+                      <AlertTriangle className="mx-auto h-6 w-6" aria-hidden="true" />
+                      <p className="mt-2">{loadError}</p>
+                      <button
+                        type="button"
+                        onClick={fetchDataset}
+                        className="mt-3 rounded-lg border border-red-200 px-3 py-1.5 font-semibold hover:bg-red-50"
+                      >
+                        Coba lagi
+                      </button>
+                    </td>
+                  </tr>
                 ) : balita.length === 0 ? (
-                  <EmptyTableRow colSpan={7} message="Tidak ada baris data balita yang cocok dengan filter." />
+                  <EmptyTableRow
+                    colSpan={7}
+                    title="Dataset kosong"
+                    description="Tidak ada data balita yang cocok dengan pencarian atau filter ini."
+                  />
                 ) : (
                   balita.map((b) => (
                     <tr key={b.id} className="transition hover:bg-slate-50/60">
@@ -420,8 +413,9 @@ export default function KelolaDataset() {
                           <button
                             type="button"
                             onClick={() => handleHapusRow(b)}
+                            disabled={isDeleting}
                             title="Hapus Dari Dataset"
-                            className="rounded-lg p-1.5 text-slate-400 transition hover:bg-red-50 hover:text-red-600"
+                            className="rounded-lg p-1.5 text-slate-400 transition hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             <Trash2 className="h-4 w-4" />
                           </button>
@@ -434,7 +428,12 @@ export default function KelolaDataset() {
             </table>
           </div>
 
-          <TableFooter from={from} to={to} total={totalCount} page={page} totalPages={totalPages} onPageChange={goTo} />
+          <TableFooter
+            summary={`Menampilkan ${from}–${to} dari ${fmt.format(totalCount)} data`}
+            page={page}
+            totalPages={totalPages}
+            onChange={goTo}
+          />
         </div>
       </section>
 
