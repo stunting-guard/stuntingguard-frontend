@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 
@@ -25,15 +25,28 @@ function unlockScroll() {
  * Modal bersama untuk seluruh role.
  * Menangani portal, scroll-lock body, focus trap, Escape, dan restore focus.
  */
-export default function Modal({ labelledBy, onClose, children, width = "max-w-lg" }) {
+export default function Modal({
+  open = false,
+  labelledBy,
+  title,
+  description,
+  onClose,
+  children,
+  width = "max-w-lg",
+}) {
   const dialogRef = useRef(null);
   const onCloseRef = useRef(onClose);
+  const generatedId = useId();
+  const titleId = `${generatedId}-title`;
+  const descriptionId = `${generatedId}-description`;
 
   useEffect(() => {
     onCloseRef.current = onClose;
   }, [onClose]);
 
   useEffect(() => {
+    if (!open) return undefined;
+
     const focusBefore = document.activeElement;
     lockScroll();
     dialogRef.current?.focus();
@@ -41,7 +54,7 @@ export default function Modal({ labelledBy, onClose, children, width = "max-w-lg
     const handleKeyDown = (event) => {
       if (event.key === "Escape") {
         event.stopPropagation();
-        onCloseRef.current();
+        onCloseRef.current?.();
         return;
       }
       if (event.key !== "Tab") return;
@@ -74,22 +87,41 @@ export default function Modal({ labelledBy, onClose, children, width = "max-w-lg
       unlockScroll();
       focusBefore?.focus?.();
     };
-  }, []);
+  }, [open]);
+
+  if (!open) return null;
 
   return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/50 backdrop-blur-sm sm:items-center sm:p-6"
-      onMouseDown={(event) => event.target === event.currentTarget && onCloseRef.current()}
+      onMouseDown={(event) => event.target === event.currentTarget && onCloseRef.current?.()}
     >
       <div
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
-        aria-labelledby={labelledBy}
+        aria-labelledby={labelledBy || (title ? titleId : undefined)}
+        aria-describedby={description ? descriptionId : undefined}
         tabIndex={-1}
-        className={`max-h-[92vh] w-full overflow-y-auto rounded-t-3xl bg-white shadow-2xl outline-none sm:rounded-3xl ${width}`}
+        className={`relative max-h-[92vh] w-full overflow-y-auto rounded-t-3xl bg-white shadow-2xl outline-none sm:rounded-3xl ${width}`}
       >
-        {children}
+        {(title || description) && (
+          <div className="border-b border-slate-100 px-6 pb-4 pt-6 sm:px-7">
+            {title && (
+              <h2 id={titleId} className="text-lg font-bold text-[#0F2942]">
+                {title}
+              </h2>
+            )}
+            {description && (
+              <p id={descriptionId} className="mt-1.5 text-sm leading-relaxed text-slate-500">
+                {description}
+              </p>
+            )}
+          </div>
+        )}
+        <div className={title || description ? "p-6 sm:p-7" : undefined}>
+          {children}
+        </div>
       </div>
     </div>,
     document.body

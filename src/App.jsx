@@ -25,6 +25,7 @@ import DashboardAdmin from "./pages/admin/DashboardAdmin";
 import KelolaDataset from "./pages/admin/KelolaDataset";
 import EvaluasiModel from "./pages/admin/EvaluasiModel";
 import KelolaPengguna from "./pages/admin/KelolaPengguna";
+import KelolaDusun from "./pages/admin/KelolaDusun";
 
 /**
  * Struktur routing utama dipisah per role dengan ProtectedRoute
@@ -58,6 +59,8 @@ export default function App() {
             <Route path="dashboard" element={<DashboardAparatur />} />
             <Route path="data-keluarga" element={<DataKeluarga />} />
             <Route path="peta-wilayah" element={<PetaWilayah />} />
+            <Route path="input-prediksi" element={<InputDataKeluarga />} />
+            <Route path="input-data" element={<InputDataKeluarga />} />
             <Route path="hasil-prediksi" element={<HasilPrediksi />} />
             <Route path="hasil-prediksi/:id" element={<HasilPrediksi />} />
             <Route path="laporan" element={<Laporan />} />
@@ -72,6 +75,7 @@ export default function App() {
             <Route path="kelola-dataset" element={<KelolaDataset />} />
             <Route path="evaluasi" element={<EvaluasiModel />} />
             <Route path="kelola-pengguna" element={<KelolaPengguna />} />
+            <Route path="kelola-dusun" element={<KelolaDusun />} />
             <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />
           </Route>
         </Route>

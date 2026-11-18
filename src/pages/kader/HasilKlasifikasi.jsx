@@ -301,7 +301,7 @@ export default function HasilKlasifikasi() {
 
   if (isLoading) {
     return (
-      <div className="flex min-h-[360px] flex-col items-center justify-center gap-3 rounded-2xl bg-white p-8 shadow-md">
+      <div className="flex min-h-[360px] flex-col items-center justify-center gap-3 rounded-2xl border border-slate-200/80 bg-white p-8 shadow-sm">
         <Loader2 className="h-8 w-8 animate-spin text-[#1B8A5A]" />
         <p className="text-sm font-medium text-slate-500">
           Memuat hasil klasifikasi risiko...
@@ -347,7 +347,7 @@ export default function HasilKlasifikasi() {
       )}
 
       {/* 1. Judul & Meta Informasi */}
-      <section className="rounded-2xl bg-white p-5 shadow-md">
+      <section className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-3">
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-[#0F2942]">
@@ -382,7 +382,7 @@ export default function HasilKlasifikasi() {
 
       {/* 2. Banner Status Klasifikasi */}
       <section
-        className={`flex flex-col gap-3.5 rounded-2xl border p-5 sm:flex-row sm:items-center sm:justify-between ${s.banner}`}
+        className={`flex flex-col gap-3.5 rounded-2xl border p-6 shadow-sm sm:flex-row sm:items-center sm:justify-between ${s.banner}`}
         aria-live="polite"
       >
         <div className="flex items-center gap-3.5 sm:gap-4">
@@ -414,7 +414,7 @@ export default function HasilKlasifikasi() {
       </section>
 
       {/* 3. Ringkasan Identitas Keluarga & Anak */}
-      <section className="rounded-2xl bg-white p-5 shadow-md sm:p-6">
+      <section className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm">
         <div className="mb-4 flex items-center gap-2 border-b border-slate-100 pb-3">
           <Users className="h-4 w-4 text-[#1B8A5A]" />
           <h2 className="text-sm font-bold text-[#0F2942]">
@@ -491,7 +491,7 @@ export default function HasilKlasifikasi() {
       </section>
 
       {/* 4. Rincian 8 Faktor Sosio-Ekonomi & Lingkungan (Fitur Utama Jurnal) */}
-      <section className="rounded-2xl bg-white p-5 shadow-md sm:p-6">
+      <section className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm">
         <div className="mb-4 flex items-center justify-between border-b border-slate-100 pb-3">
           <div className="flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-sky-600" />
@@ -611,7 +611,7 @@ export default function HasilKlasifikasi() {
       </section>
 
       {/* 5. Distribusi Probabilitas Kelas Model */}
-      <section className="rounded-2xl bg-white p-5 shadow-md sm:p-6">
+      <section className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm">
         <h2 className="text-sm font-bold text-[#0F2942]">
           Distribusi Probabilitas Kelas Random Forest
         </h2>
@@ -649,7 +649,7 @@ export default function HasilKlasifikasi() {
       </section>
 
       {/* 6. Faktor Dominan Berpengaruh */}
-      <section className="rounded-2xl bg-white p-5 shadow-md sm:p-6">
+      <section className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-sm font-bold text-[#0F2942]">
@@ -682,7 +682,7 @@ export default function HasilKlasifikasi() {
       </section>
 
       {/* 7. Rekomendasi Tindak Lanjut Lapangan */}
-      <section className="rounded-2xl bg-white p-5 shadow-md sm:p-6">
+      <section className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm">
         <div className="flex items-start gap-3.5">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-[#1B8A5A]">
             <ClipboardCheck className="h-5 w-5" aria-hidden="true" />

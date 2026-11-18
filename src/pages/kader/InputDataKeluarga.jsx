@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   Activity,
   AlertCircle,
@@ -23,7 +23,7 @@ import {
   Utensils,
   Wallet,
 } from "lucide-react";
-import { api } from "../../services/api";
+import { api, getUser } from "../../services/api";
 
 /* ------------------------- FALLBACK DATA ------------------------- */
 const DEFAULT_OPTIONS = {
@@ -136,6 +136,9 @@ const inputClass = (hasError) =>
 /* ------------------------- Halaman ------------------------- */
 export default function InputDataKeluarga() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const isAparatur = location.pathname.startsWith("/aparatur") || getUser()?.role === "APARATUR";
+
   const [form, setForm] = useState(INITIAL_FORM);
   const [errors, setErrors] = useState({});
   const [submitError, setSubmitError] = useState("");
@@ -355,9 +358,15 @@ export default function InputDataKeluarga() {
       const res = await api.post("/prediksi", payload);
 
       if (res && res.success && res.data) {
-        navigate(`/kader/hasil-klasifikasi/${res.data.id}`, {
-          state: { hasil: res.data },
-        });
+        if (isAparatur) {
+          navigate(`/aparatur/hasil-prediksi/${res.data.id}`, {
+            state: { hasil: res.data },
+          });
+        } else {
+          navigate(`/kader/hasil-klasifikasi/${res.data.id}`, {
+            state: { hasil: res.data },
+          });
+        }
       } else {
         setSubmitError(res?.message || "Gagal memproses prediksi risiko stunting.");
       }
@@ -407,25 +416,29 @@ export default function InputDataKeluarga() {
   );
 
   return (
-    <div>
-      <span className="inline-flex items-center gap-1.5 text-[10px] font-bold tracking-wide text-[#1B8A5A]">
-        <span
-          className="h-1.5 w-1.5 rounded-full bg-[#1B8A5A]"
-          aria-hidden="true"
-        />
-        FORMULIR SKRINING LAPANGAN TERSTANDISASI
-      </span>
-      <h1 className="mt-1 text-2xl font-bold text-[#0F2942] sm:text-3xl">
-        Input Data Profil Keluarga
-      </h1>
-      <p className="mt-1 text-sm text-slate-500">
-        Isi data identitas keluarga, 8 faktor determinan sosio-ekonomi (acuan jurnal Atmadji & Nugraha, 2025; Ayue et al., 2025), serta catatan Buku KIA untuk estimasi risiko stunting.
-      </p>
+    <div className="space-y-6">
+      <div className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm">
+        <span className="inline-flex items-center gap-1.5 text-[10px] font-bold tracking-wide text-[#1B8A5A]">
+          <span
+            className="h-1.5 w-1.5 rounded-full bg-[#1B8A5A]"
+            aria-hidden="true"
+          />
+          {isAparatur
+            ? "MODUL APARATUR DESA • FORM PREDIKSI RISIKO"
+            : "FORMULIR SKRINING LAPANGAN TERSTANDISASI"}
+        </span>
+        <h1 className="mt-1.5 text-2xl font-bold text-[#0F2942] sm:text-3xl">
+          {isAparatur ? "Input Prediksi Risiko Baru" : "Input Data Profil Keluarga"}
+        </h1>
+        <p className="mt-1 text-sm text-slate-500">
+          Isi data identitas keluarga, 8 faktor determinan sosio-ekonomi (acuan jurnal Atmadji &amp; Nugraha, 2025; Ayue et al., 2025), serta catatan Buku KIA untuk estimasi risiko stunting.
+        </p>
+      </div>
 
       {submitError && (
         <div
           role="alert"
-          className="mt-4 flex items-center gap-2.5 rounded-xl border border-red-200 bg-red-50 p-4 text-xs font-medium text-red-700"
+          className="flex items-center gap-2.5 rounded-xl border border-red-200 bg-red-50 p-4 text-xs font-medium text-red-700"
         >
           <AlertCircle
             className="h-4 w-4 shrink-0 text-red-600"
@@ -438,7 +451,7 @@ export default function InputDataKeluarga() {
       <form
         onSubmit={handleSubmit}
         noValidate
-        className="mt-6 space-y-8 rounded-2xl bg-white p-5 shadow-lg shadow-[#0F2942]/5 sm:p-8"
+        className="space-y-8 rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm sm:p-8"
       >
         {/* ========================================================================= */}
         {/* BAGIAN 1: IDENTITAS KELUARGA & BALITA                                     */}

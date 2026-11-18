@@ -316,12 +316,21 @@ export default function DataKeluarga() {
     return { total, tinggi, sedang, rendah };
   }, [dusunList]);
 
+  const riskField =
+    filterZona === "Kuning"
+      ? "sedang"
+      : filterZona === "Hijau"
+        ? "rendah"
+        : "tinggi";
   const dusunTertinggi = useMemo(
     () =>
       dusunList.length > 0
-        ? dusunList.reduce((max, d) => (d.tinggi > max.tinggi ? d : max), dusunList[0])
-        : { nama: "-", tinggi: 0 },
-    [dusunList]
+        ? dusunList.reduce(
+            (max, d) => (d[riskField] > max[riskField] ? d : max),
+            dusunList[0]
+          )
+        : { nama: "-", [riskField]: 0 },
+    [dusunList, riskField]
   );
 
   const handlePrint = () => window.print();
@@ -329,8 +338,14 @@ export default function DataKeluarga() {
   const handleDownload = async () => {
     setIsExporting(true);
     try {
+      const params = new URLSearchParams({
+        module: "data-keluarga",
+        format: "xlsx",
+      });
+      if (filterZona !== "Semua") params.set("zona", filterZona);
+
       await api.downloadBlob(
-        "/laporan/export?module=data-keluarga&format=xlsx",
+        `/laporan/export?${params.toString()}`,
         `Rekap-Data-Keluarga-${new Date().toISOString().slice(0, 10)}.xlsx`
       );
     } catch {
@@ -529,8 +544,8 @@ export default function DataKeluarga() {
           <div className="mt-5 flex flex-col gap-2 text-xs sm:flex-row sm:items-center sm:justify-between">
             <p className="flex items-center gap-2 text-slate-500">
               <Info className="h-4 w-4 shrink-0" />
-              {dusunTertinggi.nama} memiliki jumlah keluarga risiko tinggi terbanyak (
-              {dusunTertinggi.tinggi} KK).
+              {dusunTertinggi.nama} memiliki jumlah keluarga risiko{" "}
+              {riskField} terbanyak ({dusunTertinggi[riskField]} KK).
             </p>
             <p className="font-semibold text-teal-700">
               Total {dusunList.length} Dusun Terdata

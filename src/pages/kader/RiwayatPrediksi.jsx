@@ -155,16 +155,23 @@ export default function RiwayatPrediksi() {
   const to = Math.min(page * PAGE_SIZE, totalCount);
 
   return (
-    <div>
-      <h1 className="text-2xl font-bold text-[#0F2942] sm:text-3xl">Riwayat Prediksi Risiko</h1>
-      <p className="mt-1 text-sm text-slate-500">
-        Daftar hasil penilaian risiko stunting keluarga yang telah diperiksa.
-      </p>
+    <div className="space-y-6">
+      {/* Header Halaman */}
+      <div className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm">
+        <span className="inline-flex items-center gap-1.5 text-[10px] font-bold tracking-wide text-[#1B8A5A]">
+          <span className="h-1.5 w-1.5 rounded-full bg-[#1B8A5A]" aria-hidden="true" />
+          KONSOL POSYANDU • LOG &amp; RIWAYAT PEMERIKSAAN
+        </span>
+        <h1 className="mt-1.5 text-2xl font-bold text-[#0F2942] sm:text-3xl">Riwayat Prediksi Risiko</h1>
+        <p className="mt-1 text-sm text-slate-500">
+          Daftar hasil penilaian risiko stunting keluarga yang telah diperiksa dan divalidasi oleh sistem.
+        </p>
+      </div>
 
       {/* Filter */}
       <section
         aria-label="Filter riwayat"
-        className="mt-6 grid gap-3 rounded-2xl bg-white p-4 shadow-md md:grid-cols-[1fr_auto_auto_auto]"
+        className="grid gap-3 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm md:grid-cols-[1fr_auto_auto_auto]"
       >
         <div className="relative">
           <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -202,7 +209,7 @@ export default function RiwayatPrediksi() {
       </section>
 
       {/* Daftar */}
-      <section className="mt-5 overflow-hidden rounded-2xl bg-white shadow-md">
+      <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
         {isLoading ? (
           <div className="flex min-h-[240px] flex-col items-center justify-center gap-3 px-6 py-16">
             <Loader2 className="h-6 w-6 animate-spin text-[#1B8A5A]" />
